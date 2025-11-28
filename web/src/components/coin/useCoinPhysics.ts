@@ -37,6 +37,7 @@ export function useCoinPhysics({
   onLand,
 }: UseCoinPhysicsProps) {
   // Current position (translation only, no rotation from panning)
+  // Initialize within canvas boundaries
   const currentPositionRef = useRef({ x: 0, y: 0, z: 0 });
 
   // Target position for snap back (always returns to center)
@@ -65,16 +66,29 @@ export function useCoinPhysics({
   // Scale ref for parabolic scaling
   const currentScaleRef = useRef(1.0);
 
-  // Drag boundaries - coin cannot be dragged off-screen
-  const DRAG_BOUNDARY_X = 2.0;
-  const DRAG_BOUNDARY_Y = 2.0;
-
+  // Canvas boundaries - coin MUST stay within visible area
+  // Camera is at z=4, FOV=60, coin radius=1
+  // Account for: coin radius (1) + max scale (1.1) = effective radius 1.1
+  // To prevent ANY clipping, coin center must stay within: visible_area - effective_radius
+  // Very conservative bounds: ±0.4 units to ensure coin NEVER clips
+  const CANVAS_BOUNDARY_X = 0.4; // Maximum X translation (left/right) - extremely conservative
+  const CANVAS_BOUNDARY_Y = 0.4; // Maximum Y translation (up/down) - extremely conservative
+  const CANVAS_BOUNDARY_Z = 0; // Z must stay at 0 (no zoom)
+  
   // Animation constants
   const FLIP_DURATION = 2.0; // seconds
   const MIN_SPINS = 5; // Minimum number of full rotations
   const MAX_SPINS = 10; // Maximum number of full rotations
-  const PEAK_SCALE = 0.1; // Scale increase at peak of arc
-  const PEAK_HEIGHT = 1.5; // Maximum height during flip
+  const PEAK_SCALE = 0.05; // Scale increase at peak of arc (minimal to prevent clipping)
+  const PEAK_HEIGHT = 0.5; // Maximum height during flip (reduced to stay in bounds)
+
+  // Helper function to clamp position to canvas boundaries
+  const clampToCanvas = (pos: { x: number; y: number; z: number }) => {
+    pos.x = Math.max(-CANVAS_BOUNDARY_X, Math.min(CANVAS_BOUNDARY_X, pos.x));
+    pos.y = Math.max(-CANVAS_BOUNDARY_Y, Math.min(CANVAS_BOUNDARY_Y, pos.y));
+    pos.z = CANVAS_BOUNDARY_Z; // Always 0
+    return pos;
+  };
 
   // Apply pan translation (move coin, no rotation)
   useEffect(() => {
@@ -82,15 +96,10 @@ export function useCoinPhysics({
       const newX = currentPositionRef.current.x + panData.deltaX;
       const newY = currentPositionRef.current.y + panData.deltaY;
 
-      // Clamp to boundaries
-      currentPositionRef.current.x = Math.max(
-        -DRAG_BOUNDARY_X,
-        Math.min(DRAG_BOUNDARY_X, newX)
-      );
-      currentPositionRef.current.y = Math.max(
-        -DRAG_BOUNDARY_Y,
-        Math.min(DRAG_BOUNDARY_Y, newY)
-      );
+      // Clamp to canvas boundaries
+      currentPositionRef.current.x = newX;
+      currentPositionRef.current.y = newY;
+      clampToCanvas(currentPositionRef.current);
 
       // Reset snap back when panning
       snapBackVelocityRef.current = { x: 0, y: 0, z: 0 };
@@ -146,6 +155,10 @@ export function useCoinPhysics({
         // Normalize to 0 or π
         const normalizedY = outcome === "heads" ? 0 : Math.PI;
 
+        // CENTER COIN: Move coin to center (0, 0, 0) when flip starts
+        // Store current position for smooth transition, but target is center
+        const centerPosition = { x: 0, y: 0, z: 0 };
+
         // Store animation state
         flipAnimationRef.current = {
           isActive: true,
@@ -163,6 +176,11 @@ export function useCoinPhysics({
           targetRotationZ: 0,
           result: outcome,
         };
+
+        // Immediately start centering coin position
+        currentPositionRef.current.x = centerPosition.x;
+        currentPositionRef.current.y = centerPosition.y;
+        currentPositionRef.current.z = centerPosition.z;
 
         console.log("[useCoinPhysics] Flip animation started:", {
           startRotation: flipAnimationRef.current.startRotation,
@@ -211,15 +229,41 @@ export function useCoinPhysics({
       // Using sine wave: f(0) = 0, f(0.5) = peak, f(1) = 0
       const sineProgress = Math.sin(progress * Math.PI);
 
+      // CENTER COIN: Smoothly interpolate X and Z to center (0, 0)
+      const centerX = 0;
+      const centerZ = 0;
+      const startX = flipAnimationRef.current.startPosition.x;
+      const startZ = flipAnimationRef.current.startPosition.z;
+
+      // Use eased progress for smooth centering (faster at start)
+      const centerProgress = Math.min(progress * 2, 1); // Center within first 50% of animation
+      currentPositionRef.current.x =
+        startX + (centerX - startX) * centerProgress;
+      currentPositionRef.current.z =
+        startZ + (centerZ - startZ) * centerProgress;
+
       // Y Position: Parabolic arc (starts at 0, peaks in middle, ends at 0)
+      // Clamp Y to ensure coin doesn't go too high and stays in canvas
       const yPosition = PEAK_HEIGHT * sineProgress;
-      currentPositionRef.current.y =
-        flipAnimationRef.current.startPosition.y + yPosition;
+      const newY = flipAnimationRef.current.startPosition.y + yPosition;
+      // Clamp Y to canvas boundary (very strict to prevent clipping)
+      currentPositionRef.current.y = Math.max(
+        -CANVAS_BOUNDARY_Y,
+        Math.min(CANVAS_BOUNDARY_Y, newY)
+      );
+
+      // Enforce canvas boundaries during flip (X and Z) - very strict
+      currentPositionRef.current.x = Math.max(
+        -CANVAS_BOUNDARY_X,
+        Math.min(CANVAS_BOUNDARY_X, currentPositionRef.current.x)
+      );
+      currentPositionRef.current.z = CANVAS_BOUNDARY_Z;
 
       // Scale: Parabolic arc (starts at 1, peaks in middle, ends at 1)
+      // Limit scale to prevent coin from becoming too large and leaving canvas
       const scale =
         flipAnimationRef.current.startScale + PEAK_SCALE * sineProgress;
-      currentScaleRef.current = scale;
+      currentScaleRef.current = Math.min(1.1, scale); // Cap at 1.1 to stay in bounds
 
       // Rotation: Interpolate from start to target (ADDITIVE)
       const startRot = flipAnimationRef.current.startRotation;
@@ -237,10 +281,6 @@ export function useCoinPhysics({
       currentRotationRef.current.z =
         startRot.z + (targetRot.z - startRot.z) * easedProgress;
 
-      // X and Z positions stay constant during flip (no zoom)
-      currentPositionRef.current.x = flipAnimationRef.current.startPosition.x;
-      currentPositionRef.current.z = flipAnimationRef.current.startPosition.z;
-
       // Check if animation is complete
       if (progress >= 1) {
         console.log("[useCoinPhysics] Flip animation complete");
@@ -251,6 +291,11 @@ export function useCoinPhysics({
         currentRotationRef.current.z = 0;
         currentScaleRef.current = 1.0;
         currentPositionRef.current.y = flipAnimationRef.current.startPosition.y;
+
+        // Ensure coin is centered and within bounds
+        currentPositionRef.current.x = 0;
+        currentPositionRef.current.z = 0;
+        clampToCanvas(currentPositionRef.current);
 
         // Report result
         if (onLand && flipAnimationRef.current.result) {
@@ -273,6 +318,9 @@ export function useCoinPhysics({
         currentPositionRef.current.y += snapBackVelocityRef.current.y * delta;
         currentPositionRef.current.z = 0; // Keep Z at 0
 
+        // Enforce canvas boundaries
+        clampToCanvas(currentPositionRef.current);
+
         // Check if we've reached target
         const dx = targetPositionRef.current.x - currentPositionRef.current.x;
         const dy = targetPositionRef.current.y - currentPositionRef.current.y;
@@ -282,6 +330,7 @@ export function useCoinPhysics({
           currentPositionRef.current.x = targetPositionRef.current.x;
           currentPositionRef.current.y = targetPositionRef.current.y;
           currentPositionRef.current.z = 0;
+          clampToCanvas(currentPositionRef.current);
           snapBackVelocityRef.current = { x: 0, y: 0, z: 0 };
         } else {
           const snapDamping = 0.95;
@@ -291,6 +340,9 @@ export function useCoinPhysics({
         }
       }
     }
+
+    // Enforce canvas boundaries before applying transformations (safety check)
+    clampToCanvas(currentPositionRef.current);
 
     // Apply all transformations
     groupRef.current.position.x = currentPositionRef.current.x;

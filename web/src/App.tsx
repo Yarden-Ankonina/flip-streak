@@ -5,8 +5,12 @@ import Coin from "./components/coin/Coin";
 import InstallPrompt from "./components/InstallPrompt";
 import Header from "./components/Header";
 import ResultCounter from "./components/ResultCounter";
+import FlipButton from "./components/FlipButton";
 import { useSwipeGesture } from "./hooks/useSwipeGesture";
 import "./App.css";
+
+// Settings state (will be moved to Zustand store in future)
+type FlipMethod = "swipe" | "button";
 
 function App() {
   console.log('[App] Component rendering');
@@ -16,6 +20,9 @@ function App() {
   const [lastActionTime, setLastActionTime] = useState<number | null>(null);
   // Initialize with null - will be set when coin lands
   const [coinResult, setCoinResult] = useState<"heads" | "tails" | null>(null);
+  // Flip method setting (default to "swipe", can be changed in settings panel in future)
+  const [flipMethod, setFlipMethod] = useState<FlipMethod>("swipe");
+  const [isFlipping, setIsFlipping] = useState(false);
   
   const handleCoinLand = (result: "heads" | "tails") => {
     console.log('[App] Coin landed with result:', result);
@@ -34,14 +41,29 @@ function App() {
   };
 
   const handleFlick = (flickInfo: { velocity: number; direction: string; deltaY: number }) => {
+    if (isFlipping) return; // Prevent multiple flips
     console.log('[App] handleFlick called:', flickInfo);
+    setIsFlipping(true);
     setFlickData(flickInfo);
+    setLastActionTime(Date.now());
+  };
+  
+  const handleButtonFlip = () => {
+    if (isFlipping) return; // Prevent multiple flips
+    console.log('[App] handleButtonFlip called');
+    setIsFlipping(true);
+    // Simulate a medium-velocity flick for button press
+    setFlickData({ velocity: 500, direction: "up", deltaY: -100 });
     setLastActionTime(Date.now());
   };
 
   const handleFlickComplete = () => {
     console.log('[App] handleFlickComplete called');
     setFlickData(null);
+    // Reset flipping state after a delay to allow animation to complete
+    setTimeout(() => {
+      setIsFlipping(false);
+    }, 2100); // Slightly longer than flip duration
   };
 
   const handleTouchEnd = () => {
@@ -62,14 +84,14 @@ function App() {
   });
 
   return (
-    <div
-      ref={containerRef}
-      className="app-container"
-      onMouseDown={onMouseDown}
-      onMouseUp={onMouseUp}
-      onMouseMove={onMouseMove}
-      style={{ touchAction: "none" }}
-    >
+      <div
+        ref={containerRef}
+        className="app-container"
+        onMouseDown={flipMethod === "swipe" ? onMouseDown : undefined}
+        onMouseUp={flipMethod === "swipe" ? onMouseUp : undefined}
+        onMouseMove={flipMethod === "swipe" ? onMouseMove : undefined}
+        style={{ touchAction: flipMethod === "swipe" ? "none" : "auto" }}
+      >
       <Header />
       <Canvas
         camera={{ position: [0, 0, 4], fov: 60 }}
@@ -155,6 +177,11 @@ function App() {
 
       {/* PWA Install Prompt - hidden for now */}
       {/* <InstallPrompt /> */}
+      
+      {/* Flip Button - shown when flipMethod is "button" */}
+      {flipMethod === "button" && (
+        <FlipButton onClick={handleButtonFlip} disabled={isFlipping} />
+      )}
       
       {/* Result Counter */}
       <ResultCounter result={coinResult} />

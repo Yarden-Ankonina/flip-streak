@@ -57,11 +57,27 @@ The artist must provide PBR (Physically Based Rendering) textures.
     - Maximum drag distance is constrained to keep coin visible
     - Boundaries prevent coin from being moved too far left/right or up/down
     - When touch ends, coin snaps back to center position
-- **Swipe Up (Flip Trigger)**:
-  - User swipes upward with thumb to initiate the flip
-  - The speed of the swipe determines the rotational impulse applied
-  - Only upward swipes trigger the flip animation
-  - Coin spins/flips in 3D space with physics-based motion
+  - **Coin Centering During Flip**:
+    - When flip animation starts, coin automatically centers to middle of canvas (0, 0, 0)
+    - Prevents coin from overflowing outside visible area during flip
+    - Smooth transition to center position at flip start
+- **Flip Trigger Methods** (User can choose in settings):
+  - **Swipe Up (Default)**:
+    - User swipes upward with thumb to initiate the flip
+    - The speed of the swipe determines the rotational impulse applied
+    - Only upward swipes trigger the flip animation
+    - Coin spins/flips in 3D space with physics-based motion
+    - **Swipe Sensitivity**: Adjustable sensitivity bar in settings
+      - Controls how sensitive the swipe detection is
+      - Lower sensitivity = requires faster/longer swipe
+      - Higher sensitivity = easier to trigger flip
+      - Default: Medium sensitivity
+  - **Flip Button (Alternative)**:
+    - User can tap a button to flip the coin
+    - Button appears at bottom center of screen (above result counter)
+    - Uses medium velocity for consistent flips
+    - Button is disabled during flip animation to prevent multiple flips
+    - Can be toggled on/off in settings panel
 - **Physics Simulation**:
   - Coin always falls using physics (gravity + ground collision)
   - Realistic physics simulation for every flip
@@ -136,7 +152,25 @@ The artist must provide PBR (Physically Based Rendering) textures.
 9. **Auto-Center**: Coin automatically returns to center position after flip animation completes.
 10. **Reset**: Coin returns to center position after flip completes.
 
-## 5. Future Roadmap (Post-MVP)
+## 5. Settings Panel (Future Feature)
+
+- **Flip Method Selection**:
+  - Toggle between "Swipe Up" and "Flip Button" methods
+  - Setting persists across app sessions
+  - Default: Swipe Up
+- **Swipe Sensitivity**:
+  - Adjustable slider/bar for swipe sensitivity
+  - Range: Low (harder to trigger) to High (easier to trigger)
+  - Default: Medium
+  - Affects minimum velocity and distance thresholds for swipe detection
+- **Other Settings** (Future):
+  - Sound on/off toggle
+  - Haptics on/off toggle
+  - Theme selection
+  - Animation speed preference
+
+## 6. Future Roadmap (Post-MVP)
 
 - **Skins**: Unlockable coins (Bitcoin, Ancient Gold, Poker Chip) based on total flips.
 - **Leaderboard**: Global highest streak.
+- **Settings Panel**: Full settings UI for all user preferences.
