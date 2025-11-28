@@ -1,10 +1,10 @@
 import { useRef, useCallback } from 'react'
 
-export function useSwipeGesture(onDrag, onFlick) {
+export function useSwipeGesture(onPan, onFlick) {
   const touchStartRef = useRef(null)
   const touchStartTimeRef = useRef(null)
   const lastTouchRef = useRef(null)
-  const isDraggingRef = useRef(false)
+  const isPanningRef = useRef(false)
 
   const handleTouchStart = useCallback((e) => {
     e.preventDefault()
@@ -20,7 +20,7 @@ export function useSwipeGesture(onDrag, onFlick) {
       y: touch.clientY,
     }
     touchStartTimeRef.current = Date.now()
-    isDraggingRef.current = false
+    isPanningRef.current = false
     
     // Light haptic feedback on touch start
     if (window.navigator?.vibrate) {
@@ -43,16 +43,25 @@ export function useSwipeGesture(onDrag, onFlick) {
     const deltaY = currentY - lastTouchRef.current.y
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
     
-    // If moved enough, start dragging
-    if (distance > 5) {
-      isDraggingRef.current = true
+    // If moved enough, start panning
+    if (distance > 2) {
+      isPanningRef.current = true
       
-      // Calculate rotation angle based on finger movement
-      // Convert screen movement to rotation around Z-axis (spinning)
+      // Convert screen movement to 3D rotation
+      // Horizontal movement = Y-axis rotation (left/right)
+      // Vertical movement = X-axis rotation (up/down)
+      // Also calculate Z-axis rotation based on circular motion
+      
       const centerX = window.innerWidth / 2
       const centerY = window.innerHeight / 2
       
-      // Calculate angle from center to current touch
+      // Calculate rotation deltas
+      // Map screen movement to 3D rotation (sensitivity factor)
+      const sensitivity = 0.01
+      const rotationY = deltaX * sensitivity // Horizontal drag = Y rotation
+      const rotationX = -deltaY * sensitivity // Vertical drag = X rotation (inverted)
+      
+      // Z-axis rotation from circular motion around center
       const angle1 = Math.atan2(
         lastTouchRef.current.y - centerY,
         lastTouchRef.current.x - centerX
@@ -61,18 +70,17 @@ export function useSwipeGesture(onDrag, onFlick) {
         currentY - centerY,
         currentX - centerX
       )
-      
-      // Delta angle for rotation
       let deltaAngle = angle2 - angle1
-      
-      // Normalize to [-PI, PI]
       if (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI
       if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI
+      const rotationZ = deltaAngle * 0.5 // Scale for Z rotation
       
-      // Call drag callback with rotation delta
-      if (onDrag && Math.abs(deltaAngle) > 0.005) {
-        onDrag({
-          deltaAngle,
+      // Call pan callback with rotation deltas (direct rotation, no velocity)
+      if (onPan) {
+        onPan({
+          rotationX,
+          rotationY,
+          rotationZ,
           deltaX,
           deltaY,
           x: currentX,
@@ -86,10 +94,9 @@ export function useSwipeGesture(onDrag, onFlick) {
       x: currentX,
       y: currentY,
     }
-  }, [onDrag])
+  }, [onPan])
 
   const handleTouchEnd = useCallback((e) => {
-    console.log('👆 TOUCH END');
     if (!touchStartRef.current) return
     
     e.preventDefault()
@@ -109,22 +116,31 @@ export function useSwipeGesture(onDrag, onFlick) {
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
     const velocity = deltaTime > 0 ? distance / (deltaTime / 1000) : 0
     
-    // Flick detection: quick vertical swipe (up or down)
+    // Flick detection: quick upward swipe (only if not panning)
     const minFlickDistance = 30 // pixels
-    const minFlickVelocity = 400 // pixels per second (faster for flick)
+    const minFlickVelocity = 400 // pixels per second
     const isVerticalFlick = Math.abs(deltaY) > Math.abs(deltaX) * 1.5 // More vertical than horizontal
+    const isUpwardFlick = deltaY < -20 // Must be upward
     
-    // If it was a quick vertical swipe, treat it as a flick
-    if (!isDraggingRef.current && 
+    // Only trigger flick if:
+    // 1. Not panning (was a quick gesture)
+    // 2. Fast enough
+    // 3. Vertical and upward
+    if (!isPanningRef.current && 
         distance > minFlickDistance && 
         velocity > minFlickVelocity && 
         isVerticalFlick &&
+        isUpwardFlick &&
         onFlick) {
-      const direction = deltaY < 0 ? 'up' : 'down'
+      
+      // Heavy haptic feedback on flick
+      if (window.navigator?.vibrate) {
+        window.navigator.vibrate(50)
+      }
       
       onFlick({
         velocity,
-        direction,
+        direction: 'up',
         deltaY,
       })
     }
@@ -133,7 +149,7 @@ export function useSwipeGesture(onDrag, onFlick) {
     touchStartRef.current = null
     lastTouchRef.current = null
     touchStartTimeRef.current = null
-    isDraggingRef.current = false
+    isPanningRef.current = false
   }, [onFlick])
 
   // Mouse support for desktop
@@ -148,7 +164,7 @@ export function useSwipeGesture(onDrag, onFlick) {
       y: e.clientY,
     }
     touchStartTimeRef.current = Date.now()
-    isDraggingRef.current = false
+    isPanningRef.current = false
   }, [])
 
   const handleMouseMove = useCallback((e) => {
@@ -162,11 +178,15 @@ export function useSwipeGesture(onDrag, onFlick) {
     const deltaY = currentY - lastTouchRef.current.y
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
     
-    if (distance > 5) {
-      isDraggingRef.current = true
+    if (distance > 2) {
+      isPanningRef.current = true
       
       const centerX = window.innerWidth / 2
       const centerY = window.innerHeight / 2
+      
+      const sensitivity = 0.01
+      const rotationY = deltaX * sensitivity
+      const rotationX = -deltaY * sensitivity
       
       const angle1 = Math.atan2(
         lastTouchRef.current.y - centerY,
@@ -176,14 +196,16 @@ export function useSwipeGesture(onDrag, onFlick) {
         currentY - centerY,
         currentX - centerX
       )
-      
       let deltaAngle = angle2 - angle1
       if (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI
       if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI
+      const rotationZ = deltaAngle * 0.5
       
-      if (onDrag && Math.abs(deltaAngle) > 0.01) {
-        onDrag({
-          deltaAngle,
+      if (onPan) {
+        onPan({
+          rotationX,
+          rotationY,
+          rotationZ,
           deltaX,
           deltaY,
           x: currentX,
@@ -193,7 +215,7 @@ export function useSwipeGesture(onDrag, onFlick) {
     }
     
     lastTouchRef.current = { x: currentX, y: currentY }
-  }, [onDrag])
+  }, [onPan])
 
   const handleMouseUp = useCallback((e) => {
     if (!touchStartRef.current) return
@@ -214,16 +236,17 @@ export function useSwipeGesture(onDrag, onFlick) {
     const minFlickDistance = 30
     const minFlickVelocity = 400
     const isVerticalFlick = Math.abs(deltaY) > Math.abs(deltaX) * 1.5
+    const isUpwardFlick = deltaY < -20
     
-    if (!isDraggingRef.current && 
+    if (!isPanningRef.current && 
         distance > minFlickDistance && 
         velocity > minFlickVelocity && 
         isVerticalFlick &&
+        isUpwardFlick &&
         onFlick) {
-      const direction = deltaY < 0 ? 'up' : 'down'
       onFlick({
         velocity,
-        direction,
+        direction: 'up',
         deltaY,
       })
     }
@@ -231,7 +254,7 @@ export function useSwipeGesture(onDrag, onFlick) {
     touchStartRef.current = null
     lastTouchRef.current = null
     touchStartTimeRef.current = null
-    isDraggingRef.current = false
+    isPanningRef.current = false
   }, [onFlick])
 
   return {

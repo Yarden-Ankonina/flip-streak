@@ -2,21 +2,22 @@ import { useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
 import Coin from "./components/Coin";
+import InstallPrompt from "./components/InstallPrompt";
 import { useSwipeGesture } from "./hooks/useSwipeGesture";
 import "./App.css";
 
 function App() {
-  const [dragData, setDragData] = useState(null);
+  const [panData, setPanData] = useState(null);
   const [flickData, setFlickData] = useState(null);
   const [lastActionTime, setLastActionTime] = useState(null);
 
-  const handleDrag = (dragInfo) => {
-    setDragData(dragInfo);
+  const handlePan = (panInfo) => {
+    setPanData(panInfo);
     setLastActionTime(Date.now());
   };
 
-  const handleDragComplete = () => {
-    setDragData(null);
+  const handlePanComplete = () => {
+    setPanData(null);
   };
 
   const handleFlick = (flickInfo) => {
@@ -28,7 +29,7 @@ function App() {
     setFlickData(null);
   };
 
-  const swipeHandlers = useSwipeGesture(handleDrag, handleFlick);
+  const swipeHandlers = useSwipeGesture(handlePan, handleFlick);
 
   return (
     <div
@@ -61,9 +62,9 @@ function App() {
 
         {/* The Coin - only this moves */}
         <Coin
-          dragData={dragData}
+          panData={panData}
           flickData={flickData}
-          onDragComplete={handleDragComplete}
+          onPanComplete={handlePanComplete}
           onFlickComplete={handleFlickComplete}
         />
       </Canvas>
@@ -90,15 +91,19 @@ function App() {
               <br />
             </>
           )}
-          {dragData && (
+          {panData && (
             <>
-              Drag: {dragData.deltaAngle.toFixed(3)} rad
+              Pan: X:{panData.rotationX.toFixed(3)} Y:
+              {panData.rotationY.toFixed(3)} Z:{panData.rotationZ.toFixed(3)}
               <br />
             </>
           )}
-          <small>Drag to spin • Flick up/down to flip</small>
+          <small>Touch & drag to rotate • Flick up to flip</small>
         </div>
       )}
+
+      {/* PWA Install Prompt */}
+      <InstallPrompt />
     </div>
   );
 }

@@ -43,10 +43,21 @@ The artist must provide PBR (Physically Based Rendering) textures.
 
 ### 3.2 Physics & Interaction (The "Thumb" Feel)
 
-- **Gesture**: User swipes up/flick with thumb.
-- **Velocity**: The speed of the swipe determines the rotational impulse applied to the physics body.
+**Interaction Model (Pokemon TCG Coin Style):**
+
+- **Touch & Drag (Panning)**:
+  - User can touch and drag the coin to rotate it in 3D space on all axes
+  - This allows viewing the coin from different angles (like holding and rotating it)
+  - **Does NOT start flipping** - this is just for inspection/positioning
+  - Coin follows finger movement directly (1:1 rotation mapping)
+- **Flick Up (Flip Trigger)**:
+  - User flicks upward with thumb to initiate the flip
+  - The speed of the flick determines the rotational impulse applied
+  - Only upward flicks trigger the flip animation
+  - Coin spins/flips in 3D space with physics-based motion
 - **Haptics**: (Via Capacitor Haptics Plugin)
-  - Light vibration on "touch start".
+  - Light vibration on "touch start" (when panning).
+  - Heavy vibration on "flick trigger".
   - Heavy vibration on "landing".
 - **Sound**: A "clink" sound effect triggers on collision with the ground plane.
 
@@ -60,11 +71,12 @@ The artist must provide PBR (Physically Based Rendering) textures.
 
 ## 4. User Flow
 
-1. **Idle**: Coin sits in center. "Swipe to Flip" hint (fades out after first use).
-2. **Action**: User flicks thumb.
-3. **Animation**: Coin spins in 3D space (Z-axis rotation) using physics impulses.
-4. **Result**: Coin collides with the floor and settles.
-5. **Feedback**:
+1. **Idle**: Coin sits in center, face-on to camera. "Flick Up to Flip" hint (fades out after first use).
+2. **Inspection (Optional)**: User can touch and drag to rotate coin in 3D space, viewing it from different angles.
+3. **Action**: User flicks thumb upward.
+4. **Animation**: Coin receives rotational impulse and spins/flips in 3D space using physics.
+5. **Result**: Coin collides with the floor and settles.
+6. **Feedback**:
    - Haptic click.
    - Text: "HEADS" appears.
    - Streak Counter updates.

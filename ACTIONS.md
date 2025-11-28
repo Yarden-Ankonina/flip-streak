@@ -53,23 +53,33 @@ This document outlines the actionable steps for building FlipStreak, broken down
 - [ ] Add coin as physics body (cylinder shape)
 - [ ] Test coin falls and collides with ground
 
-### 3.2 Swipe Gesture Detection
+### 3.2 Touch & Drag (Panning) - Pokemon TCG Style
 
-- [ ] Create `web/src/hooks/useSwipeGesture.js` hook
-- [ ] Detect touch start position
-- [ ] Track touch move to calculate velocity
-- [ ] Detect touch end and calculate swipe direction
-- [ ] Calculate swipe velocity magnitude
-- [ ] Test gesture detection logs correctly
+- [ ] Implement direct rotation on touch and drag
+- [ ] Map finger movement to 3D rotation (all axes: X, Y, Z)
+- [ ] Convert screen coordinates to 3D rotation angles
+- [ ] Make coin follow finger movement 1:1 (no velocity, direct rotation)
+- [ ] Ensure panning does NOT trigger flip animation
+- [ ] Test coin can be rotated smoothly in all directions
+- [ ] Add haptic feedback on touch start (light vibration)
 
-### 3.3 Apply Physics Impulse
+### 3.3 Flick Up Gesture Detection
 
-- [ ] Connect swipe gesture to coin physics body
-- [ ] Convert swipe velocity to rotational impulse
-- [ ] Apply impulse to coin on Z-axis (flip rotation)
-- [ ] Add slight X/Y rotation for realistic flip
-- [ ] Test coin flips with different swipe speeds
+- [ ] Detect upward flick gesture (distinguish from drag)
+- [ ] Calculate flick velocity and direction
+- [ ] Only trigger on upward flicks (not downward or horizontal)
+- [ ] Set minimum velocity threshold for flick detection
+- [ ] Test flick detection works correctly
+
+### 3.4 Apply Physics Impulse (Flip)
+
+- [ ] Connect flick gesture to coin physics body
+- [ ] Convert flick velocity to rotational impulse on multiple axes
+- [ ] Apply impulse to coin (Z-axis for spin, Y-axis for flip, X-axis for tilt)
+- [ ] Add realistic multi-axis rotation for satisfying flip
+- [ ] Test coin flips with different flick speeds
 - [ ] Adjust impulse multiplier for satisfying feel
+- [ ] Add haptic feedback on flick trigger (heavy vibration)
 
 ### 3.4 Ground Collision
 

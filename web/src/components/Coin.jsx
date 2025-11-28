@@ -1,45 +1,49 @@
 import { useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 
-export default function Coin({ dragData, flickData, onDragComplete, onFlickComplete }) {
+export default function Coin({ panData, flickData, onPanComplete, onFlickComplete }) {
   const coinRef = useRef();
   // Base rotation: face-on to camera (90° on X-axis)
   const baseRotationX = Math.PI / 2;
   
-  // Rotation velocities for each axis
-  const spinVelocityRef = useRef(0); // Z-axis (spinning)
-  const flipVelocityRef = useRef(0); // Y-axis (flipping up/down)
-  const tiltVelocityRef = useRef(0); // X-axis (additional tilt)
-  
-  // Current rotation values (in addition to base)
+  // Current rotation values (direct rotation for panning)
   const currentRotationRef = useRef({ x: 0, y: 0, z: 0 });
+  
+  // Rotation velocities for flipping (only applied on flick)
+  const flipVelocityXRef = useRef(0);
+  const flipVelocityYRef = useRef(0);
+  const flipVelocityZRef = useRef(0);
 
-  // Apply drag rotation (spinning)
+  // Apply pan rotation (direct rotation, no velocity - Pokemon TCG style)
   useEffect(() => {
-    if (dragData) {
-      // Convert drag angle to spin velocity
-      // The drag gives us deltaAngle, convert to velocity
-      const spinImpulse = dragData.deltaAngle * 10; // Scale for feel
-      spinVelocityRef.current += spinImpulse;
+    if (panData) {
+      // Directly apply rotation deltas (no velocity accumulation)
+      // This allows smooth panning/rotation of the coin
+      currentRotationRef.current.x += panData.rotationX;
+      currentRotationRef.current.y += panData.rotationY;
+      currentRotationRef.current.z += panData.rotationZ;
       
-      if (onDragComplete) {
-        setTimeout(() => onDragComplete(), 0);
+      if (onPanComplete) {
+        setTimeout(() => onPanComplete(), 0);
       }
     }
-  }, [dragData, onDragComplete]);
+  }, [panData, onPanComplete]);
 
-  // Apply flick impulse (flipping)
+  // Apply flick impulse (flipping - only this starts the flip animation)
   useEffect(() => {
     if (flickData) {
-      // Convert flick velocity to flip rotation (around Y-axis for vertical flip)
-      // Flick up = positive rotation, flick down = negative
-      // Increased multiplier for more visible flip effect
-      const flipImpulse = (flickData.direction === 'up' ? 1 : -1) * flickData.velocity * 0.08;
-      flipVelocityRef.current += flipImpulse;
+      // Convert flick velocity to rotational impulses on all axes
+      // This creates a realistic multi-axis flip
+      const baseImpulse = flickData.velocity * 0.08;
       
-      // Also add a slight tilt on X-axis for more dynamic flip
-      const tiltImpulse = (flickData.direction === 'up' ? -1 : 1) * flickData.velocity * 0.02;
-      tiltVelocityRef.current += tiltImpulse;
+      // Y-axis: main flip rotation
+      flipVelocityYRef.current += baseImpulse;
+      
+      // Z-axis: spinning rotation
+      flipVelocityZRef.current += baseImpulse * 0.6;
+      
+      // X-axis: slight tilt for realism
+      flipVelocityXRef.current += baseImpulse * 0.3;
       
       if (onFlickComplete) {
         setTimeout(() => onFlickComplete(), 0);
@@ -47,52 +51,40 @@ export default function Coin({ dragData, flickData, onDragComplete, onFlickCompl
     }
   }, [flickData, onFlickComplete]);
 
-  // Apply rotations with damping
+  // Apply rotations
   useFrame((state, delta) => {
     if (coinRef.current) {
-      // Apply spin rotation (Z-axis) - spinning on table
-      if (spinVelocityRef.current !== 0) {
-        currentRotationRef.current.z += spinVelocityRef.current * delta;
+      // Apply flip velocities (only active after flick)
+      if (flipVelocityXRef.current !== 0) {
+        currentRotationRef.current.x += flipVelocityXRef.current * delta;
         
-        // Damping for spin
-        const spinDamping = 0.96;
-        spinVelocityRef.current *= Math.pow(spinDamping, delta * 60);
+        const damping = 0.97;
+        flipVelocityXRef.current *= Math.pow(damping, delta * 60);
         
-        if (Math.abs(spinVelocityRef.current) < 0.01) {
-          spinVelocityRef.current = 0;
+        if (Math.abs(flipVelocityXRef.current) < 0.01) {
+          flipVelocityXRef.current = 0;
         }
       }
       
-      // Apply flip rotation (Y-axis) - flipping up/down
-      if (flipVelocityRef.current !== 0) {
-        currentRotationRef.current.y += flipVelocityRef.current * delta;
+      if (flipVelocityYRef.current !== 0) {
+        currentRotationRef.current.y += flipVelocityYRef.current * delta;
         
-        // Damping for flip
-        const flipDamping = 0.98;
-        flipVelocityRef.current *= Math.pow(flipDamping, delta * 60);
+        const damping = 0.98;
+        flipVelocityYRef.current *= Math.pow(damping, delta * 60);
         
-        if (Math.abs(flipVelocityRef.current) < 0.01) {
-          flipVelocityRef.current = 0;
+        if (Math.abs(flipVelocityYRef.current) < 0.01) {
+          flipVelocityYRef.current = 0;
         }
       }
       
-      // Apply tilt rotation (X-axis) - additional tilt during flip
-      if (tiltVelocityRef.current !== 0) {
-        currentRotationRef.current.x += tiltVelocityRef.current * delta;
+      if (flipVelocityZRef.current !== 0) {
+        currentRotationRef.current.z += flipVelocityZRef.current * delta;
         
-        // Damping for tilt (stronger damping to return to base)
-        const tiltDamping = 0.95;
-        tiltVelocityRef.current *= Math.pow(tiltDamping, delta * 60);
+        const damping = 0.96;
+        flipVelocityZRef.current *= Math.pow(damping, delta * 60);
         
-        if (Math.abs(tiltVelocityRef.current) < 0.01) {
-          tiltVelocityRef.current = 0;
-        }
-        
-        // Return X rotation to base over time
-        if (Math.abs(currentRotationRef.current.x) > 0.01) {
-          currentRotationRef.current.x *= 0.98;
-        } else {
-          currentRotationRef.current.x = 0;
+        if (Math.abs(flipVelocityZRef.current) < 0.01) {
+          flipVelocityZRef.current = 0;
         }
       }
       
