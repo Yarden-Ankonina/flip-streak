@@ -1,26 +1,19 @@
 import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { CylinderGeometry, MeshStandardMaterial } from 'three'
 
 export default function Coin() {
   const coinRef = useRef()
 
-  // Subtle idle rotation animation
-  useFrame((state, delta) => {
-    if (coinRef.current) {
-      // Gentle rotation on Y-axis for idle animation
-      coinRef.current.rotation.y += delta * 0.5
-    }
-  })
-
+  // Coin is positioned on the ground
+  // Height is 0.1, so position at y: 0.05 (half height) to rest on ground
   return (
     <mesh
       ref={coinRef}
-      position={[0, 2, 0]}
-      rotation={[Math.PI / 2, 0, 0]} // Rotate to lay flat (coin orientation)
+      position={[0, 0.05, 0]}
+      rotation={[0, 0, 0]} // Lying flat on the ground
     >
       {/* CylinderGeometry: radiusTop, radiusBottom, height, radialSegments */}
-      <cylinderGeometry args={[1, 1, 0.1, 32]} />
+      {/* Height is 0.1, radius is 1 */}
+      <cylinderGeometry args={[1, 1, 0.1, 64]} />
       <meshStandardMaterial 
         color="#d4af37" // Gold color for now
         metalness={0.8}
