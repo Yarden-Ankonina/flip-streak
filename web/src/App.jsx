@@ -6,21 +6,35 @@ import { useSwipeGesture } from "./hooks/useSwipeGesture";
 import "./App.css";
 
 function App() {
-  const [swipeData, setSwipeData] = useState(null);
+  const [dragData, setDragData] = useState(null);
+  const [flickData, setFlickData] = useState(null);
+  const [lastActionTime, setLastActionTime] = useState(null);
 
-  const handleSwipe = (swipeInfo) => {
-    console.log("Swipe detected:", swipeInfo);
-    setSwipeData(swipeInfo);
-    // TODO: Apply physics impulse to coin
+  const handleDrag = (dragInfo) => {
+    setDragData(dragInfo);
+    setLastActionTime(Date.now());
   };
 
-  const swipeHandlers = useSwipeGesture(handleSwipe);
+  const handleDragComplete = () => {
+    setDragData(null);
+  };
+
+  const handleFlick = (flickInfo) => {
+    setFlickData(flickInfo);
+    setLastActionTime(Date.now());
+  };
+
+  const handleFlickComplete = () => {
+    setFlickData(null);
+  };
+
+  const swipeHandlers = useSwipeGesture(handleDrag, handleFlick);
 
   return (
     <div
       className="app-container"
       {...swipeHandlers}
-      style={{ touchAction: "none" }} // Prevent default touch behaviors
+      style={{ touchAction: "none" }}
     >
       <Canvas
         camera={{ position: [0, 0, 4], fov: 60 }}
@@ -46,11 +60,16 @@ function App() {
         </mesh>
 
         {/* The Coin - only this moves */}
-        <Coin swipeData={swipeData} />
+        <Coin
+          dragData={dragData}
+          flickData={flickData}
+          onDragComplete={handleDragComplete}
+          onFlickComplete={handleFlickComplete}
+        />
       </Canvas>
 
-      {/* Debug info (remove later) */}
-      {swipeData && (
+      {/* Debug info */}
+      {lastActionTime && (
         <div
           style={{
             position: "absolute",
@@ -61,9 +80,23 @@ function App() {
             padding: "10px",
             borderRadius: "5px",
             fontSize: "12px",
+            zIndex: 1000,
           }}
         >
-          Swipe: {swipeData.velocity.toFixed(0)} px/s
+          {flickData && (
+            <>
+              Flick: {flickData.direction} ({flickData.velocity.toFixed(0)}{" "}
+              px/s)
+              <br />
+            </>
+          )}
+          {dragData && (
+            <>
+              Drag: {dragData.deltaAngle.toFixed(3)} rad
+              <br />
+            </>
+          )}
+          <small>Drag to spin • Flick up/down to flip</small>
         </div>
       )}
     </div>
