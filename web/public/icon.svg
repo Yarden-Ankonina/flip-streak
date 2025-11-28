@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#d4af37" stroke="#b8941f" stroke-width="8"/>
+  
+  <!-- Coin face - simplified design -->
+  <circle cx="256" cy="256" r="200" fill="#f4d03f"/>
+  
+  <!-- Edge highlight -->
+  <ellipse cx="256" cy="120" rx="180" ry="30" fill="#b8941f" opacity="0.3"/>
+  <ellipse cx="256" cy="392" rx="180" ry="30" fill="#8b6914" opacity="0.5"/>
+  
+  <!-- Simple "H" for Heads (you can replace with actual coin design) -->
+  <text x="256" y="280" font-family="Arial, sans-serif" font-size="120" font-weight="bold" text-anchor="middle" fill="#8b6914">H</text>
+</svg>
+
