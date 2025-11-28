@@ -14,8 +14,13 @@ function App() {
   const [panData, setPanData] = useState<{ deltaX: number; deltaY: number; x: number; y: number } | null>(null);
   const [flickData, setFlickData] = useState<{ velocity: number; direction: string; deltaY: number } | null>(null);
   const [lastActionTime, setLastActionTime] = useState<number | null>(null);
-  // Initialize with heads showing (coin starts on heads)
-  const [coinResult, setCoinResult] = useState<"heads" | "tails" | null>("heads");
+  // Initialize with null - will be set when coin lands
+  const [coinResult, setCoinResult] = useState<"heads" | "tails" | null>(null);
+  
+  const handleCoinLand = (result: "heads" | "tails") => {
+    console.log('[App] Coin landed with result:', result);
+    setCoinResult(result);
+  };
 
   const handlePan = (panInfo: { deltaX: number; deltaY: number; x: number; y: number }) => {
     console.log('[App] handlePan called:', panInfo);
@@ -70,6 +75,7 @@ function App() {
         camera={{ position: [0, 0, 4], fov: 60 }}
         shadows
         dpr={[1, 2]} // Device pixel ratio for mobile optimization
+        gl={{ preserveDrawingBuffer: true, antialias: true }}
         onCreated={(state) => {
           console.log('[App] Canvas created:', {
             camera: state.camera.position,
@@ -110,6 +116,7 @@ function App() {
             onPanComplete={handlePanComplete}
             onFlickComplete={handleFlickComplete}
             onTouchEnd={panData && 'snapBack' in panData ? handleTouchEnd : null}
+            onLand={handleCoinLand}
           />
         </Suspense>
       </Canvas>

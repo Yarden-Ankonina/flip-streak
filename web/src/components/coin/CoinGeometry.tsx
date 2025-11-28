@@ -16,6 +16,8 @@ export function CoinGeometry({
   headsMaterial,
   tailsMaterial,
 }: CoinGeometryProps) {
+  // Ensure 1:1 aspect ratio - coin should be perfectly circular
+  // Using equal radius for top and bottom to maintain circular shape
   return (
     <>
       {/* Top face (heads) - positioned on top, rotated to face camera */}
@@ -30,7 +32,7 @@ export function CoinGeometry({
         {tailsMaterial}
       </mesh>
       
-      {/* Edge/rim - gives the coin thickness/width */}
+      {/* Edge/rim - gives the coin thickness/width, maintains 1:1 ratio */}
       <mesh>
         <cylinderGeometry args={[radius, radius, height, radialSegments, 1, true]} />
         <meshStandardMaterial

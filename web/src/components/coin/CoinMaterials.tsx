@@ -1,36 +1,32 @@
 import { useEffect } from "react";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
-import headsImg from "../../assets/coins/heads.png";
-import tailsImg from "../../assets/coins/tails.png";
-import ridgesImg from "../../assets/coins/ridges.png";
+import headsImg from "../../assets/coins/heads-corgi.png";
+import tailsImg from "../../assets/coins/tails-corgi.png";
 
 interface CoinMaterialsProps {
   onTexturesLoaded?: (textures: {
     heads: THREE.Texture;
     tails: THREE.Texture;
-    ridges: THREE.Texture;
   }) => void;
 }
 
 export function useCoinMaterials(onTexturesLoaded?: CoinMaterialsProps['onTexturesLoaded']) {
   console.log('[useCoinMaterials] Loading textures');
-  const [headsTexture, tailsTexture, ridgesTexture] = useTexture([
+  const [headsTexture, tailsTexture] = useTexture([
     headsImg,
     tailsImg,
-    ridgesImg,
   ]);
 
   useEffect(() => {
     console.log('[useCoinMaterials] Textures loaded:', {
       heads: !!headsTexture,
       tails: !!tailsTexture,
-      ridges: !!ridgesTexture,
     });
 
-    if (headsTexture && tailsTexture && ridgesTexture) {
+    if (headsTexture && tailsTexture) {
       // Configure texture properties
-      [headsTexture, tailsTexture, ridgesTexture].forEach((texture) => {
+      [headsTexture, tailsTexture].forEach((texture) => {
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
         texture.flipY = false;
@@ -41,13 +37,12 @@ export function useCoinMaterials(onTexturesLoaded?: CoinMaterialsProps['onTextur
         onTexturesLoaded({
           heads: headsTexture,
           tails: tailsTexture,
-          ridges: ridgesTexture,
         });
       }
     } else {
       console.warn('[useCoinMaterials] Some textures are missing!');
     }
-  }, [headsTexture, tailsTexture, ridgesTexture, onTexturesLoaded]);
+  }, [headsTexture, tailsTexture, onTexturesLoaded]);
 
   return {
     headsMaterial: (

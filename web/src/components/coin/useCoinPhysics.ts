@@ -18,6 +18,7 @@ interface UseCoinPhysicsProps {
   onTouchEnd: (() => void) | null;
   baseRotationX: number;
   groupRef: React.RefObject<THREE.Group>;
+  onLand?: (result: "heads" | "tails") => void;
 }
 
 export function useCoinPhysics({
@@ -28,6 +29,7 @@ export function useCoinPhysics({
   onTouchEnd,
   baseRotationX,
   groupRef,
+  onLand,
 }: UseCoinPhysicsProps) {
   // Current position (translation only, no rotation from panning)
   const currentPositionRef = useRef({ x: 0, y: 0, z: 0 });
@@ -54,6 +56,10 @@ export function useCoinPhysics({
   const verticalVelocityRef = useRef(0); // Vertical (Y) velocity for falling
   const isLandedRef = useRef(false);
   const landingZPosition = -2; // Coin lands at this Z position (back of screen)
+  
+  // Maximum flip duration (in seconds) - prevents users from waiting too long
+  const MAX_FLIP_DURATION = 3.0; // 3 seconds max
+  const flipStartTimeRef = useRef<number | null>(null); // Store frame time when flip starts
 
   // Apply pan translation (move coin, no rotation)
   useEffect(() => {
@@ -108,6 +114,7 @@ export function useCoinPhysics({
       // Start falling (gravity) when flip begins
       verticalVelocityRef.current = 0.5; // Initial upward velocity
       isLandedRef.current = false;
+      // Note: flipStartTimeRef will be set in useFrame using frame clock time
       
       console.log('[useCoinPhysics] Flip velocities set:', {
         x: flipVelocityXRef.current,
@@ -217,11 +224,13 @@ export function useCoinPhysics({
         snapBackVelocityRef.current.z = (dz / distance) * snapBackSpeed;
       }
       
-      // Reset landing state when starting to move back
-      if (distance > 0.05) {
-        isLandedRef.current = false;
-        verticalVelocityRef.current = 0;
-      }
+              // Reset landing state when starting to move back
+              if (distance > 0.05) {
+                isLandedRef.current = false;
+                verticalVelocityRef.current = 0;
+                flipStartTimeRef.current = null; // Reset flip timer
+                landedResultRef.current = null; // Clear previous result
+              }
     }
     
     // If we were flipping and now all velocities are zero (but not landed yet), flip completed
@@ -232,6 +241,55 @@ export function useCoinPhysics({
     
     // Update flip state for next frame
     wasFlippingRef.current = hasFlipVelocity;
+    
+    // Initialize flip start time on first frame of flip
+    if (hasFlipVelocity && flipStartTimeRef.current === null) {
+      flipStartTimeRef.current = state.clock.elapsedTime;
+    }
+    
+    // Check if max flip duration has been exceeded
+    if (flipStartTimeRef.current !== null && !isLandedRef.current) {
+      const elapsedTime = state.clock.elapsedTime - flipStartTimeRef.current;
+      
+      if (elapsedTime >= MAX_FLIP_DURATION) {
+        // Max time exceeded - force coin to land immediately
+        console.log('[useCoinPhysics] Max flip duration exceeded, forcing landing');
+        
+        // Stop all velocities
+        flipVelocityXRef.current = 0;
+        flipVelocityYRef.current = 0;
+        flipVelocityZRef.current = 0;
+        verticalVelocityRef.current = 0;
+        
+        // Force coin to landing position
+        // Detect heads/tails before resetting
+        const totalYRotation = currentRotationRef.current.y;
+        let normalizedY = ((totalYRotation % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
+        const isHeads = (normalizedY < Math.PI / 2) || (normalizedY > (3 * Math.PI) / 2);
+        const result: "heads" | "tails" = isHeads ? "heads" : "tails";
+        
+        console.log('[useCoinPhysics] Max duration - forcing landing with result:', result);
+        
+        // Store the result
+        landedResultRef.current = result;
+        
+        if (onLand) {
+          onLand(result);
+        }
+        
+        currentPositionRef.current.y = 0; // Ground level
+        currentPositionRef.current.z = landingZPosition;
+        isLandedRef.current = true;
+        flipStartTimeRef.current = null;
+        
+        // Reset rotation to face-on, but set Y rotation based on result:
+        // - Heads: Y = 0 (same as start)
+        // - Tails: Y = Math.PI (rotated 180° to show tails)
+        currentRotationRef.current.x = 0;
+        currentRotationRef.current.y = result === "heads" ? 0 : Math.PI;
+        currentRotationRef.current.z = 0;
+      }
+    }
     
     // Apply landing physics (gravity and falling)
     if (!isLandedRef.current && (hasFlipVelocity || verticalVelocityRef.current !== 0)) {
@@ -250,24 +308,53 @@ export function useCoinPhysics({
       // Check if coin has landed (reached ground level)
       const groundLevel = 0; // Ground plane is at y=0
       if (currentPositionRef.current.y <= groundLevel && verticalVelocityRef.current < 0) {
-        // Landed!
+        // Landed! Detect heads or tails based on Y rotation
+        // Y rotation determines which side is facing up:
+        // - Y rotation near 0 or multiples of 2π = heads (same as start)
+        // - Y rotation near π or π + multiples of 2π = tails (flipped 180°)
+        const totalYRotation = currentRotationRef.current.y;
+        // Normalize to 0-2π range
+        let normalizedY = ((totalYRotation % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
+        // Determine result: 
+        // - If Y is in [0, π/2) or (3π/2, 2π] = heads
+        // - If Y is in [π/2, 3π/2] = tails
+        const isHeads = (normalizedY < Math.PI / 2) || (normalizedY > (3 * Math.PI) / 2);
+        const result: "heads" | "tails" = isHeads ? "heads" : "tails";
+        
+        console.log('[useCoinPhysics] Coin landed - detecting result:', {
+          totalYRotation,
+          normalizedY,
+          result,
+          rotation: currentRotationRef.current,
+        });
+        
+        // Report result to parent
+        if (onLand) {
+          onLand(result);
+        }
+        
         currentPositionRef.current.y = groundLevel;
         verticalVelocityRef.current = 0;
         isLandedRef.current = true;
+        flipStartTimeRef.current = null; // Reset flip start time
         
         // Stop all flip velocities when landed
         flipVelocityXRef.current = 0;
         flipVelocityYRef.current = 0;
         flipVelocityZRef.current = 0;
         
+        // Store the result
+        landedResultRef.current = result;
+        
+        // Reset rotation to face-on, but set Y rotation based on result:
+        // - Heads: Y = 0 (same as start)
+        // - Tails: Y = Math.PI (rotated 180° to show tails)
+        currentRotationRef.current.x = 0;
+        currentRotationRef.current.y = result === "heads" ? 0 : Math.PI;
+        currentRotationRef.current.z = 0;
+        
         // Ensure coin is at landing Z position
         currentPositionRef.current.z = landingZPosition;
-        
-        console.log('[useCoinPhysics] Coin landed at:', {
-          x: currentPositionRef.current.x,
-          y: currentPositionRef.current.y,
-          z: currentPositionRef.current.z,
-        });
       }
     }
     

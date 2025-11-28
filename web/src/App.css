@@ -16,4 +16,6 @@ canvas {
   padding-top: 60px;
   padding-bottom: 100px;
   box-sizing: border-box;
+  /* Ensure proper aspect ratio handling */
+  object-fit: contain;
 }

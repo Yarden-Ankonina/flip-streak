@@ -72,6 +72,11 @@ The artist must provide PBR (Physically Based Rendering) textures.
   - Coin moves back in Z direction as it falls toward landing position
   - When coin reaches ground level (Y=0), all physics stop and coin settles
   - After landing, coin automatically returns to center position
+- **Maximum Flip Duration**:
+  - Coin toss animation has a maximum time limit (e.g., 3 seconds)
+  - Prevents users from waiting too long for the coin to settle
+  - If max duration is exceeded, coin is forced to land immediately at the landing position
+  - All flip velocities are stopped when max time is reached
 - **Double-Click/Tap to Skip**:
   - User can double-click or double-tap during the flip animation
   - Immediately skips the physics simulation and shows the result

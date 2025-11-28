@@ -10,9 +10,10 @@ interface CoinProps {
   onPanComplete: () => void;
   onFlickComplete: () => void;
   onTouchEnd: (() => void) | null;
+  onLand?: (result: "heads" | "tails") => void;
 }
 
-export default function Coin({ panData, flickData, onPanComplete, onFlickComplete, onTouchEnd }: CoinProps) {
+export default function Coin({ panData, flickData, onPanComplete, onFlickComplete, onTouchEnd, onLand }: CoinProps) {
   console.log('[Coin] Component rendering');
   
   const groupRef = useRef<THREE.Group>(null);
@@ -55,6 +56,7 @@ export default function Coin({ panData, flickData, onPanComplete, onFlickComplet
     onTouchEnd,
     baseRotationX,
     groupRef,
+    onLand,
   });
 
   console.log('[Coin] Rendering coin geometry');

@@ -20,8 +20,10 @@
 }
 
 .result-icon {
-  font-size: 1.5rem;
-  line-height: 1;
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+  display: block;
 }
 
 .result-label {
