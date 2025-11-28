@@ -1,0 +1,26 @@
+{
+  "name": "flip-streak",
+  "version": "1.0.0",
+  "description": "A hyper-casual utility app for flipping a realistic 3D coin with streak tracking",
+  "private": true,
+  "scripts": {
+    "dev": "cd web && pnpm dev",
+    "build": "cd web && pnpm build",
+    "preview": "cd web && pnpm preview",
+    "cap:sync": "cd web && pnpm cap:sync",
+    "cap:ios": "cd web && pnpm cap:ios",
+    "cap:android": "cd web && pnpm cap:android"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yarden-Ankonina/flip-streak.git"
+  },
+  "keywords": ["react", "three.js", "mobile", "capacitor", "3d", "coin-flip"],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Yarden-Ankonina/flip-streak/issues"
+  },
+  "homepage": "https://github.com/Yarden-Ankonina/flip-streak#readme",
+  "packageManager": "pnpm@10.10.0"
+}
