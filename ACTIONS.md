@@ -53,14 +53,15 @@ This document outlines the actionable steps for building FlipStreak, broken down
 - [ ] Add coin as physics body (cylinder shape)
 - [ ] Test coin falls and collides with ground
 
-### 3.2 Touch & Drag (Panning) - Pokemon TCG Style
+### 3.2 Touch & Drag (Panning) - Translation Only
 
-- [ ] Implement direct rotation on touch and drag
-- [ ] Map finger movement to 3D rotation (all axes: X, Y, Z)
-- [ ] Convert screen coordinates to 3D rotation angles
-- [ ] Make coin follow finger movement 1:1 (no velocity, direct rotation)
-- [ ] Ensure panning does NOT trigger flip animation
-- [ ] Test coin can be rotated smoothly in all directions
+- [x] Implement translation-only drag (no rotation)
+- [x] Map finger movement to X/Y translation only
+- [x] Coin follows finger movement 1:1 (direct position mapping)
+- [x] Ensure panning does NOT trigger flip animation
+- [x] Ensure panning does NOT rotate the coin
+- [x] Add drag boundaries to prevent coin from being dragged off-screen
+- [x] Implement snap-back to center when touch ends
 - [ ] Add haptic feedback on touch start (light vibration)
 
 ### 3.3 Flick Up Gesture Detection
@@ -81,23 +82,30 @@ This document outlines the actionable steps for building FlipStreak, broken down
 - [ ] Adjust impulse multiplier for satisfying feel
 - [ ] Add haptic feedback on flick trigger (heavy vibration)
 
-### 3.4 Ground Collision
+### 3.4 Ground Collision & Landing Animation
 
-- [ ] Ensure ground plane has proper collision detection
-- [ ] Add collision event listener to coin
-- [ ] Detect when coin lands on ground
-- [ ] Stop physics simulation when coin settles
-- [ ] Add damping to prevent infinite bouncing
-- [ ] Test coin lands and settles properly
+- [x] Ensure ground plane has proper collision detection
+- [x] Detect when coin lands on ground (Y position <= 0)
+- [x] Implement realistic landing animation with bounce
+- [x] Add wobble/oscillation during landing (decaying over time)
+- [x] Aggressively flatten X and Z rotations to ensure coin lands face-on
+- [x] Ensure coin always ends up perfectly flat (X=0, Z=0 rotations)
+- [x] Gradually rotate to final result (heads or tails) during landing
+- [x] Stop physics simulation when landing animation completes
+- [x] Add damping to prevent infinite bouncing
+- [x] Test coin lands and settles properly with realistic physics
 
 ### 3.5 Heads/Tails Detection
 
-- [ ] Create `web/src/utils/coinDetection.js` utility
-- [ ] Get coin's final rotation (Euler angles) after landing
-- [ ] Determine which face is up based on Y-axis rotation
-- [ ] Define threshold for heads vs tails (e.g., Y rotation % 360)
-- [ ] Store result in state
-- [ ] Test detection accuracy with various landing positions
+- [x] Detect coin result based on Y-axis rotation when landing
+- [x] Normalize Y rotation to 0-2π range
+- [x] Determine heads vs tails based on Y rotation:
+  - Y in [0, π/2) or (3π/2, 2π] = heads
+  - Y in [π/2, 3π/2] = tails
+- [x] Report result to parent component via callback
+- [x] Update counter with detected result
+- [x] Ensure coin shows correct side (heads or tails) when landed
+- [x] Test detection accuracy with various landing positions
 
 ## Phase 4: Haptics & Sound
 

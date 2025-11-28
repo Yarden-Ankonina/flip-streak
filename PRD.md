@@ -53,6 +53,10 @@ The artist must provide PBR (Physically Based Rendering) textures.
   - **Does NOT rotate the coin** - only translates its position
   - Coin remains face-on to camera during dragging
   - **Does NOT start flipping** - this is just for positioning
+  - **Drag Boundaries**: Coin cannot be dragged off-screen
+    - Maximum drag distance is constrained to keep coin visible
+    - Boundaries prevent coin from being moved too far left/right or up/down
+    - When touch ends, coin snaps back to center position
 - **Swipe Up (Flip Trigger)**:
   - User swipes upward with thumb to initiate the flip
   - The speed of the swipe determines the rotational impulse applied
@@ -70,8 +74,16 @@ The artist must provide PBR (Physically Based Rendering) textures.
   - Coin must land on the floor at a fixed point (back of screen, same Z position)
   - Gravity applies during flip animation (coin falls down)
   - Coin moves back in Z direction as it falls toward landing position
-  - When coin reaches ground level (Y=0), all physics stop and coin settles
-  - After landing, coin automatically returns to center position
+  - When coin reaches ground level (Y=0), landing animation begins
+  - **Landing Animation**: Realistic bounce and wobble before settling
+    - Coin bounces slightly when hitting the ground (elasticity-based)
+    - Coin wobbles/oscillates as it settles (decaying oscillation)
+    - X and Z rotations aggressively flatten to ensure coin lands face-on
+    - Coin gradually rotates to show final result (heads or tails)
+    - Animation duration: ~1.5 seconds for satisfying feel
+    - Coin MUST end up perfectly flat (X and Z rotations = 0)
+    - Only Y rotation varies to show heads (0°) or tails (180°)
+  - After landing animation completes, coin automatically returns to center position
 - **Maximum Flip Duration**:
   - Coin toss animation has a maximum time limit (e.g., 3 seconds)
   - Prevents users from waiting too long for the coin to settle
@@ -92,10 +104,20 @@ The artist must provide PBR (Physically Based Rendering) textures.
 
 - **Display**: A prominent counter at the bottom showing the current result (Heads or Tails) with count.
 - **Format**: Shows "Heads x3" or "Tails x5" format with icon, label, and count.
-- **Styling**: Counter text should be white (not yellow/gold) for better visibility.
+- **Styling**:
+  - Counter text should be white (not yellow/gold) for better visibility
+  - No background on counter (transparent)
+  - Uses actual coin images (heads-corgi.png, tails-corgi.png) for icons
 - **Algorithm**:
+  - Counter increments only when a new result is detected (not on every frame)
   - If NewResult == PreviousResult: Streak + 1
   - If NewResult != PreviousResult: Streak = 1
+  - Counter starts at 0 and increments with each flip
+- **Result Detection**:
+  - Coin result is determined by Y-axis rotation when landing
+  - Y rotation near 0 or 2π = heads
+  - Y rotation near π = tails
+  - Result is detected during landing animation and reported to counter
 - **Visual Feedback**: The counter pulses or changes color when a streak > 3.
 
 ## 4. User Flow
