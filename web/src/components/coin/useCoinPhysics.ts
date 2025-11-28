@@ -68,24 +68,33 @@ export function useCoinPhysics({
 
   // Canvas boundaries - coin MUST stay within visible area
   // Camera is at z=4, FOV=60, coin radius=1
-  // Account for: coin radius (1) + max scale (1.1) = effective radius 1.1
+  // Account for: coin radius (1) + max scale (1.02) = effective radius 1.02
   // To prevent ANY clipping, coin center must stay within: visible_area - effective_radius
-  // Very conservative bounds: ±0.4 units to ensure coin NEVER clips
-  const CANVAS_BOUNDARY_X = 0.4; // Maximum X translation (left/right) - extremely conservative
-  const CANVAS_BOUNDARY_Y = 0.4; // Maximum Y translation (up/down) - extremely conservative
+  // DRAG boundaries: More permissive for dragging (before flip)
+  // FLIP boundaries: Stricter during flip to prevent clipping
+  const DRAG_BOUNDARY_X = 1.2; // Maximum X translation during drag (left/right) - allows movement
+  const DRAG_BOUNDARY_Y = 1.2; // Maximum Y translation during drag (up/down) - allows movement
+  const FLIP_BOUNDARY_X = 0.15; // Maximum X during flip (stricter to prevent clipping)
+  const FLIP_BOUNDARY_Y = 0.15; // Maximum Y during flip (stricter to prevent clipping)
   const CANVAS_BOUNDARY_Z = 0; // Z must stay at 0 (no zoom)
-  
+
   // Animation constants
   const FLIP_DURATION = 2.0; // seconds
   const MIN_SPINS = 5; // Minimum number of full rotations
   const MAX_SPINS = 10; // Maximum number of full rotations
-  const PEAK_SCALE = 0.05; // Scale increase at peak of arc (minimal to prevent clipping)
-  const PEAK_HEIGHT = 0.5; // Maximum height during flip (reduced to stay in bounds)
+  const PEAK_SCALE = 0.01; // Scale increase at peak of arc (minimal to prevent clipping)
+  const PEAK_HEIGHT = 0.15; // Maximum height during flip (reduced to stay in bounds)
 
   // Helper function to clamp position to canvas boundaries
-  const clampToCanvas = (pos: { x: number; y: number; z: number }) => {
-    pos.x = Math.max(-CANVAS_BOUNDARY_X, Math.min(CANVAS_BOUNDARY_X, pos.x));
-    pos.y = Math.max(-CANVAS_BOUNDARY_Y, Math.min(CANVAS_BOUNDARY_Y, pos.y));
+  // Use different boundaries for drag vs flip
+  const clampToCanvas = (
+    pos: { x: number; y: number; z: number },
+    isFlipping: boolean = false
+  ) => {
+    const boundaryX = isFlipping ? FLIP_BOUNDARY_X : DRAG_BOUNDARY_X;
+    const boundaryY = isFlipping ? FLIP_BOUNDARY_Y : DRAG_BOUNDARY_Y;
+    pos.x = Math.max(-boundaryX, Math.min(boundaryX, pos.x));
+    pos.y = Math.max(-boundaryY, Math.min(boundaryY, pos.y));
     pos.z = CANVAS_BOUNDARY_Z; // Always 0
     return pos;
   };
@@ -96,10 +105,10 @@ export function useCoinPhysics({
       const newX = currentPositionRef.current.x + panData.deltaX;
       const newY = currentPositionRef.current.y + panData.deltaY;
 
-      // Clamp to canvas boundaries
+      // Clamp to drag boundaries (more permissive for dragging)
       currentPositionRef.current.x = newX;
       currentPositionRef.current.y = newY;
-      clampToCanvas(currentPositionRef.current);
+      clampToCanvas(currentPositionRef.current, false); // false = not flipping, use drag boundaries
 
       // Reset snap back when panning
       snapBackVelocityRef.current = { x: 0, y: 0, z: 0 };
@@ -246,16 +255,21 @@ export function useCoinPhysics({
       // Clamp Y to ensure coin doesn't go too high and stays in canvas
       const yPosition = PEAK_HEIGHT * sineProgress;
       const newY = flipAnimationRef.current.startPosition.y + yPosition;
-      // Clamp Y to canvas boundary (very strict to prevent clipping)
+      // Clamp Y to flip boundary (very strict to prevent clipping)
       currentPositionRef.current.y = Math.max(
-        -CANVAS_BOUNDARY_Y,
-        Math.min(CANVAS_BOUNDARY_Y, newY)
+        -FLIP_BOUNDARY_Y,
+        Math.min(FLIP_BOUNDARY_Y, newY)
       );
 
       // Enforce canvas boundaries during flip (X and Z) - very strict
+      // Use flip boundaries (stricter) to prevent clipping
       currentPositionRef.current.x = Math.max(
-        -CANVAS_BOUNDARY_X,
-        Math.min(CANVAS_BOUNDARY_X, currentPositionRef.current.x)
+        -FLIP_BOUNDARY_X,
+        Math.min(FLIP_BOUNDARY_X, currentPositionRef.current.x)
+      );
+      currentPositionRef.current.y = Math.max(
+        -FLIP_BOUNDARY_Y,
+        Math.min(FLIP_BOUNDARY_Y, currentPositionRef.current.y)
       );
       currentPositionRef.current.z = CANVAS_BOUNDARY_Z;
 
@@ -263,7 +277,7 @@ export function useCoinPhysics({
       // Limit scale to prevent coin from becoming too large and leaving canvas
       const scale =
         flipAnimationRef.current.startScale + PEAK_SCALE * sineProgress;
-      currentScaleRef.current = Math.min(1.1, scale); // Cap at 1.1 to stay in bounds
+      currentScaleRef.current = Math.min(1.02, scale); // Cap at 1.02 to stay in bounds
 
       // Rotation: Interpolate from start to target (ADDITIVE)
       const startRot = flipAnimationRef.current.startRotation;
@@ -292,10 +306,10 @@ export function useCoinPhysics({
         currentScaleRef.current = 1.0;
         currentPositionRef.current.y = flipAnimationRef.current.startPosition.y;
 
-        // Ensure coin is centered and within bounds
+        // Ensure coin is centered and within bounds (use flip boundaries)
         currentPositionRef.current.x = 0;
         currentPositionRef.current.z = 0;
-        clampToCanvas(currentPositionRef.current);
+        clampToCanvas(currentPositionRef.current, true); // true = just finished flipping
 
         // Report result
         if (onLand && flipAnimationRef.current.result) {
@@ -318,8 +332,8 @@ export function useCoinPhysics({
         currentPositionRef.current.y += snapBackVelocityRef.current.y * delta;
         currentPositionRef.current.z = 0; // Keep Z at 0
 
-        // Enforce canvas boundaries
-        clampToCanvas(currentPositionRef.current);
+        // Enforce canvas boundaries (not flipping, use drag boundaries)
+        clampToCanvas(currentPositionRef.current, false);
 
         // Check if we've reached target
         const dx = targetPositionRef.current.x - currentPositionRef.current.x;
@@ -342,7 +356,9 @@ export function useCoinPhysics({
     }
 
     // Enforce canvas boundaries before applying transformations (safety check)
-    clampToCanvas(currentPositionRef.current);
+    // Use flip boundaries if flipping, drag boundaries otherwise
+    const isCurrentlyFlipping = flipAnimationRef.current.isActive;
+    clampToCanvas(currentPositionRef.current, isCurrentlyFlipping);
 
     // Apply all transformations
     groupRef.current.position.x = currentPositionRef.current.x;

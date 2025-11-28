@@ -91,14 +91,23 @@ The artist must provide PBR (Physically Based Rendering) textures.
   - Gravity applies during flip animation (coin falls down)
   - Coin moves back in Z direction as it falls toward landing position
   - When coin reaches ground level (Y=0), landing animation begins
-  - **Landing Animation**: Realistic bounce and wobble before settling
-    - Coin bounces slightly when hitting the ground (elasticity-based)
-    - Coin wobbles/oscillates as it settles (decaying oscillation)
-    - X and Z rotations aggressively flatten to ensure coin lands face-on
-    - Coin gradually rotates to show final result (heads or tails)
-    - Animation duration: ~1.5 seconds for satisfying feel
-    - Coin MUST end up perfectly flat (X and Z rotations = 0)
-    - Only Y rotation varies to show heads (0°) or tails (180°)
+  - **Landing Animation**: Realistic multi-phase landing with precession and wobble
+    - **Phase 1 - Initial Bounce**: Coin bounces slightly when hitting the ground (elasticity-based)
+    - **Phase 2 - Precession**: Coin slows down and tilts onto its edge, rotating around the edge axis
+      - Begins when rotation velocity drops below threshold
+      - Coin appears to "balance on its edge" while spinning
+      - Precession amplitude and frequency decrease as energy is lost
+      - Creates realistic "wobbling on edge" effect
+    - **Phase 3 - Wobble**: Coin oscillates with small amplitude before settling
+      - Small back-and-forth motion on X and Z axes
+      - Wobble amplitude decays exponentially
+      - Creates "shimmy" effect before final rest
+    - **Phase 4 - Final Settling**: Coin flattens completely
+      - X and Z rotations aggressively flatten to 0
+      - Coin gradually rotates to show final result (heads or tails)
+      - Animation duration: ~2.0 seconds total for satisfying feel
+      - Coin MUST end up perfectly flat (X and Z rotations = 0)
+      - Only Y rotation varies to show heads (0°) or tails (180°)
   - After landing animation completes, coin automatically returns to center position
 - **Maximum Flip Duration**:
   - Coin toss animation has a maximum time limit (e.g., 3 seconds)
