@@ -3,10 +3,16 @@ import { useFrame } from "@react-three/fiber";
 
 export default function Coin({ dragData, flickData, onDragComplete, onFlickComplete }) {
   const coinRef = useRef();
-  // Rotation around Z-axis (spinning on table)
-  const spinVelocityRef = useRef(0);
-  // Rotation around X-axis (flipping up/down)
-  const flipVelocityRef = useRef(0);
+  // Base rotation: face-on to camera (90° on X-axis)
+  const baseRotationX = Math.PI / 2;
+  
+  // Rotation velocities for each axis
+  const spinVelocityRef = useRef(0); // Z-axis (spinning)
+  const flipVelocityRef = useRef(0); // Y-axis (flipping up/down)
+  const tiltVelocityRef = useRef(0); // X-axis (additional tilt)
+  
+  // Current rotation values (in addition to base)
+  const currentRotationRef = useRef({ x: 0, y: 0, z: 0 });
 
   // Apply drag rotation (spinning)
   useEffect(() => {
@@ -25,10 +31,15 @@ export default function Coin({ dragData, flickData, onDragComplete, onFlickCompl
   // Apply flick impulse (flipping)
   useEffect(() => {
     if (flickData) {
-      // Convert flick velocity to flip rotation (around X-axis)
+      // Convert flick velocity to flip rotation (around Y-axis for vertical flip)
       // Flick up = positive rotation, flick down = negative
-      const flipImpulse = (flickData.direction === 'up' ? 1 : -1) * flickData.velocity * 0.02;
+      // Increased multiplier for more visible flip effect
+      const flipImpulse = (flickData.direction === 'up' ? 1 : -1) * flickData.velocity * 0.08;
       flipVelocityRef.current += flipImpulse;
+      
+      // Also add a slight tilt on X-axis for more dynamic flip
+      const tiltImpulse = (flickData.direction === 'up' ? -1 : 1) * flickData.velocity * 0.02;
+      tiltVelocityRef.current += tiltImpulse;
       
       if (onFlickComplete) {
         setTimeout(() => onFlickComplete(), 0);
@@ -41,7 +52,7 @@ export default function Coin({ dragData, flickData, onDragComplete, onFlickCompl
     if (coinRef.current) {
       // Apply spin rotation (Z-axis) - spinning on table
       if (spinVelocityRef.current !== 0) {
-        coinRef.current.rotation.z += spinVelocityRef.current * delta;
+        currentRotationRef.current.z += spinVelocityRef.current * delta;
         
         // Damping for spin
         const spinDamping = 0.96;
@@ -52,18 +63,43 @@ export default function Coin({ dragData, flickData, onDragComplete, onFlickCompl
         }
       }
       
-      // Apply flip rotation (X-axis) - flipping up/down
+      // Apply flip rotation (Y-axis) - flipping up/down
       if (flipVelocityRef.current !== 0) {
-        coinRef.current.rotation.x += flipVelocityRef.current * delta;
+        currentRotationRef.current.y += flipVelocityRef.current * delta;
         
         // Damping for flip
-        const flipDamping = 0.97;
+        const flipDamping = 0.98;
         flipVelocityRef.current *= Math.pow(flipDamping, delta * 60);
         
         if (Math.abs(flipVelocityRef.current) < 0.01) {
           flipVelocityRef.current = 0;
         }
       }
+      
+      // Apply tilt rotation (X-axis) - additional tilt during flip
+      if (tiltVelocityRef.current !== 0) {
+        currentRotationRef.current.x += tiltVelocityRef.current * delta;
+        
+        // Damping for tilt (stronger damping to return to base)
+        const tiltDamping = 0.95;
+        tiltVelocityRef.current *= Math.pow(tiltDamping, delta * 60);
+        
+        if (Math.abs(tiltVelocityRef.current) < 0.01) {
+          tiltVelocityRef.current = 0;
+        }
+        
+        // Return X rotation to base over time
+        if (Math.abs(currentRotationRef.current.x) > 0.01) {
+          currentRotationRef.current.x *= 0.98;
+        } else {
+          currentRotationRef.current.x = 0;
+        }
+      }
+      
+      // Apply all rotations: base X rotation + current rotations
+      coinRef.current.rotation.x = baseRotationX + currentRotationRef.current.x;
+      coinRef.current.rotation.y = currentRotationRef.current.y;
+      coinRef.current.rotation.z = currentRotationRef.current.z;
     }
   });
 
@@ -72,7 +108,7 @@ export default function Coin({ dragData, flickData, onDragComplete, onFlickCompl
     <mesh
       ref={coinRef}
       position={[0, 0, 0]}
-      rotation={[Math.PI / 2, 0, 0]} // Start face-on (90° on X-axis)
+      rotation={[baseRotationX, 0, 0]} // Start face-on (90° on X-axis)
     >
       <cylinderGeometry args={[1, 1, 0.1, 64]} />
       <meshStandardMaterial
