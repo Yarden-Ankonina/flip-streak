@@ -9,8 +9,21 @@ interface UseCoinPhysicsProps {
   onFlickComplete: () => void;
   onTouchEnd: (() => void) | null;
   baseRotationX: number;
-  groupRef: React.RefObject<THREE.Group>;
+  groupRef: React.RefObject<THREE.Group | null>;
   onLand?: (result: "heads" | "tails") => void;
+}
+
+interface FlipAnimationState {
+  isActive: boolean;
+  startTime: number;
+  duration: number;
+  startRotation: { x: number; y: number; z: number };
+  startPosition: { x: number; y: number; z: number };
+  startScale: number;
+  targetRotationX: number; // Multiple of π
+  targetRotationY: number; // 0 for heads, π for tails
+  targetRotationZ: number; // Always 0
+  result: "heads" | "tails" | null;
 }
 
 export function useCoinPhysics({
@@ -29,52 +42,43 @@ export function useCoinPhysics({
   // Target position for snap back (always returns to center)
   const targetPositionRef = useRef({ x: 0, y: 0, z: 0 });
 
-  // Rotation velocities for flipping (only applied on flick)
-  const flipVelocityXRef = useRef(0);
-  const flipVelocityYRef = useRef(0);
-  const flipVelocityZRef = useRef(0);
-
   // Current rotation (only from flipping, not from panning)
   const currentRotationRef = useRef({ x: 0, y: 0, z: 0 });
 
   // Snap back velocity for position
   const snapBackVelocityRef = useRef({ x: 0, y: 0, z: 0 });
 
-  // Track if flip was active in previous frame (for auto-center detection)
-  const wasFlippingRef = useRef(false);
+  // Flip animation state
+  const flipAnimationRef = useRef<FlipAnimationState>({
+    isActive: false,
+    startTime: 0,
+    duration: 2.0, // 2 seconds flip duration
+    startRotation: { x: 0, y: 0, z: 0 },
+    startPosition: { x: 0, y: 0, z: 0 },
+    startScale: 1.0,
+    targetRotationX: 0,
+    targetRotationY: 0,
+    targetRotationZ: 0,
+    result: null,
+  });
 
-  // Landing physics
-  const gravityRef = useRef(-9.81); // Gravity acceleration
-  const verticalVelocityRef = useRef(0); // Vertical (Y) velocity for falling
-  const isLandedRef = useRef(false);
-  const isLandingRef = useRef(false); // Track if we're in the landing animation phase
-  const landingZPosition = -2; // Coin lands at this Z position (back of screen)
-
-  // Maximum flip duration (in seconds) - prevents users from waiting too long
-  const MAX_FLIP_DURATION = 3.0; // 3 seconds max
-  const flipStartTimeRef = useRef<number | null>(null); // Store frame time when flip starts
-  const landedResultRef = useRef<"heads" | "tails" | null>(null); // Store the result when landed
-
-  // Landing animation state
-  const landingWobbleXRef = useRef(0); // X-axis wobble during landing
-  const landingWobbleZRef = useRef(0); // Z-axis wobble during landing
-  const landingWobbleVelocityXRef = useRef(0); // Wobble velocity X
-  const landingWobbleVelocityZRef = useRef(0); // Wobble velocity Z
-  const targetResultRotationYRef = useRef<number | null>(null); // Target Y rotation for final result
-  const landingAnimationStartTimeRef = useRef<number | null>(null); // When landing animation started
-  const LANDING_ANIMATION_DURATION = 1.5; // Duration of landing animation in seconds
-  const BOUNCE_ELASTICITY = 0.3; // How much the coin bounces (0-1, lower = less bounce)
-  const WOBBLE_DAMPING = 0.92; // Damping for wobble (higher = slower decay)
+  // Scale ref for parabolic scaling
+  const currentScaleRef = useRef(1.0);
 
   // Drag boundaries - coin cannot be dragged off-screen
-  const DRAG_BOUNDARY_X = 2.0; // Maximum X translation (left/right)
-  const DRAG_BOUNDARY_Y = 2.0; // Maximum Y translation (up/down)
+  const DRAG_BOUNDARY_X = 2.0;
+  const DRAG_BOUNDARY_Y = 2.0;
+
+  // Animation constants
+  const FLIP_DURATION = 2.0; // seconds
+  const MIN_SPINS = 5; // Minimum number of full rotations
+  const MAX_SPINS = 10; // Maximum number of full rotations
+  const PEAK_SCALE = 0.1; // Scale increase at peak of arc
+  const PEAK_HEIGHT = 1.5; // Maximum height during flip
 
   // Apply pan translation (move coin, no rotation)
   useEffect(() => {
     if (panData) {
-      console.log("[useCoinPhysics] Pan data received:", panData);
-      // Apply delta with boundary constraints
       const newX = currentPositionRef.current.x + panData.deltaX;
       const newY = currentPositionRef.current.y + panData.deltaY;
 
@@ -86,10 +90,6 @@ export function useCoinPhysics({
       currentPositionRef.current.y = Math.max(
         -DRAG_BOUNDARY_Y,
         Math.min(DRAG_BOUNDARY_Y, newY)
-      );
-      console.log(
-        "[useCoinPhysics] Position updated:",
-        currentPositionRef.current
       );
 
       // Reset snap back when panning
@@ -108,461 +108,186 @@ export function useCoinPhysics({
 
       const dx = targetPositionRef.current.x - currentPositionRef.current.x;
       const dy = targetPositionRef.current.y - currentPositionRef.current.y;
-      const dz = targetPositionRef.current.z - currentPositionRef.current.z;
-
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const distance = Math.sqrt(dx * dx + dy * dy);
 
       if (distance > 0.01) {
         snapBackVelocityRef.current.x = (dx / distance) * snapBackSpeed;
         snapBackVelocityRef.current.y = (dy / distance) * snapBackSpeed;
-        snapBackVelocityRef.current.z = (dz / distance) * snapBackSpeed;
+        snapBackVelocityRef.current.z = 0;
       }
     }
   }, [onTouchEnd]);
 
-  // Apply flick impulse (flipping - only this starts the flip animation)
+  // Apply flick impulse (flipping - starts the flip animation)
   useEffect(() => {
-    if (flickData) {
-      console.log("[useCoinPhysics] Flick data received:", flickData);
-      // Reduced base impulse for less overall movement
-      const baseImpulse = flickData.velocity * 0.04; // Reduced from 0.08
+    if (flickData && !flipAnimationRef.current.isActive) {
+      // Determine outcome (50/50 chance)
+      const outcome: "heads" | "tails" =
+        Math.random() < 0.5 ? "heads" : "tails";
 
-      // Focus on Y-axis (up/down flip) - main rotation
-      flipVelocityYRef.current += baseImpulse;
-      // Reduced Z-axis rotation (spinning)
-      flipVelocityZRef.current += baseImpulse * 0.3; // Reduced from 0.6
-      // Minimal X-axis rotation (tilt)
-      flipVelocityXRef.current += baseImpulse * 0.1; // Reduced from 0.3
+      // Get current rotation from the mesh (CUMULATIVE - additive approach)
+      if (groupRef.current) {
+        const currentX = currentRotationRef.current.x;
+        const currentY = currentRotationRef.current.y;
+        const currentZ = currentRotationRef.current.z;
 
-      // Start falling (gravity) when flip begins
-      verticalVelocityRef.current = 0.5; // Initial upward velocity
-      isLandedRef.current = false;
-      // Note: flipStartTimeRef will be set in useFrame using frame clock time
+        // Calculate number of spins (random between MIN and MAX)
+        const numSpins = MIN_SPINS + Math.random() * (MAX_SPINS - MIN_SPINS);
 
-      console.log("[useCoinPhysics] Flip velocities set:", {
-        x: flipVelocityXRef.current,
-        y: flipVelocityYRef.current,
-        z: flipVelocityZRef.current,
-      });
+        // FLAT FLOOR CONSTRAINT: Target X rotation must be multiple of π
+        // Add extra spins to current rotation (ADDITIVE)
+        const extraSpinsX = numSpins * Math.PI * 2;
+        const targetX = currentX + extraSpinsX;
+        // Normalize to nearest multiple of π
+        const normalizedX = Math.round(targetX / Math.PI) * Math.PI;
+
+        // FLAT FLOOR CONSTRAINT: Target Y rotation
+        // 0 for heads, π for tails (ADDITIVE from current)
+        // Normalize to 0 or π
+        const normalizedY = outcome === "heads" ? 0 : Math.PI;
+
+        // Store animation state
+        flipAnimationRef.current = {
+          isActive: true,
+          startTime: 0, // Will be set in useFrame
+          duration: FLIP_DURATION,
+          startRotation: { x: currentX, y: currentY, z: currentZ },
+          startPosition: {
+            x: currentPositionRef.current.x,
+            y: currentPositionRef.current.y,
+            z: currentPositionRef.current.z,
+          },
+          startScale: currentScaleRef.current,
+          targetRotationX: normalizedX,
+          targetRotationY: normalizedY,
+          targetRotationZ: 0,
+          result: outcome,
+        };
+
+        console.log("[useCoinPhysics] Flip animation started:", {
+          startRotation: flipAnimationRef.current.startRotation,
+          targetRotation: {
+            x: normalizedX,
+            y: normalizedY,
+            z: 0,
+          },
+          outcome,
+        });
+      }
 
       if (onFlickComplete) {
         setTimeout(() => onFlickComplete(), 0);
       }
     }
-  }, [flickData, onFlickComplete]);
+  }, [flickData, onFlickComplete, groupRef]);
+
+  // Easing function for smooth animation
+  const easeInOutCubic = (t: number): number => {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  };
 
   // Apply translations and rotations
   useFrame((state, delta) => {
     if (!groupRef.current) {
-      console.warn("[useCoinPhysics] useFrame: groupRef.current is null!");
       return;
     }
 
-    // Log first few frames
-    if (state.clock.elapsedTime < 0.1) {
-      console.log("[useCoinPhysics] useFrame running:", {
-        elapsedTime: state.clock.elapsedTime,
-        delta,
-        hasGroup: !!groupRef.current,
-      });
-    }
-
-    // Apply snap back for position (only if not flipping)
-    const hasFlipVelocity =
-      Math.abs(flipVelocityXRef.current) > 0.01 ||
-      Math.abs(flipVelocityYRef.current) > 0.01 ||
-      Math.abs(flipVelocityZRef.current) > 0.01;
-
+    // Initialize flip animation start time
     if (
-      !hasFlipVelocity &&
-      (snapBackVelocityRef.current.x !== 0 ||
-        snapBackVelocityRef.current.y !== 0 ||
-        snapBackVelocityRef.current.z !== 0)
+      flipAnimationRef.current.isActive &&
+      flipAnimationRef.current.startTime === 0
     ) {
-      // Apply snap back velocity
-      currentPositionRef.current.x += snapBackVelocityRef.current.x * delta;
-      currentPositionRef.current.y += snapBackVelocityRef.current.y * delta;
-      currentPositionRef.current.z += snapBackVelocityRef.current.z * delta;
-
-      // Check if we've reached target
-      const dx = targetPositionRef.current.x - currentPositionRef.current.x;
-      const dy = targetPositionRef.current.y - currentPositionRef.current.y;
-      const dz = targetPositionRef.current.z - currentPositionRef.current.z;
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-      if (distance < 0.05) {
-        currentPositionRef.current.x = targetPositionRef.current.x;
-        currentPositionRef.current.y = targetPositionRef.current.y;
-        currentPositionRef.current.z = targetPositionRef.current.z;
-        snapBackVelocityRef.current = { x: 0, y: 0, z: 0 };
-      } else {
-        const snapDamping = 0.95;
-        snapBackVelocityRef.current.x *= Math.pow(snapDamping, delta * 60);
-        snapBackVelocityRef.current.y *= Math.pow(snapDamping, delta * 60);
-        snapBackVelocityRef.current.z *= Math.pow(snapDamping, delta * 60);
-      }
+      flipAnimationRef.current.startTime = state.clock.elapsedTime;
     }
 
-    // Apply flip velocities (only active after flick)
-    // Heavier damping for more weight feel (higher damping = heavier feel)
-    if (flipVelocityXRef.current !== 0) {
-      currentRotationRef.current.x += flipVelocityXRef.current * delta;
-      const damping = 0.99; // Increased from 0.97 for heavier feel
-      flipVelocityXRef.current *= Math.pow(damping, delta * 60);
-      if (Math.abs(flipVelocityXRef.current) < 0.01) {
-        flipVelocityXRef.current = 0;
-      }
-    }
+    // Handle flip animation
+    if (flipAnimationRef.current.isActive) {
+      const elapsed =
+        state.clock.elapsedTime - flipAnimationRef.current.startTime;
+      const progress = Math.min(elapsed / flipAnimationRef.current.duration, 1);
+      const easedProgress = easeInOutCubic(progress);
 
-    if (flipVelocityYRef.current !== 0) {
-      currentRotationRef.current.y += flipVelocityYRef.current * delta;
-      const damping = 0.995; // Increased from 0.98 for heavier feel
-      flipVelocityYRef.current *= Math.pow(damping, delta * 60);
-      if (Math.abs(flipVelocityYRef.current) < 0.01) {
-        flipVelocityYRef.current = 0;
-      }
-    }
+      // PARABOLIC ARC: Continuous curve for Y position and Scale
+      // Using sine wave: f(0) = 0, f(0.5) = peak, f(1) = 0
+      const sineProgress = Math.sin(progress * Math.PI);
 
-    if (flipVelocityZRef.current !== 0) {
-      currentRotationRef.current.z += flipVelocityZRef.current * delta;
-      const damping = 0.99; // Increased from 0.96 for heavier feel
-      flipVelocityZRef.current *= Math.pow(damping, delta * 60);
-      if (Math.abs(flipVelocityZRef.current) < 0.01) {
-        flipVelocityZRef.current = 0;
-      }
-    }
+      // Y Position: Parabolic arc (starts at 0, peaks in middle, ends at 0)
+      const yPosition = PEAK_HEIGHT * sineProgress;
+      currentPositionRef.current.y =
+        flipAnimationRef.current.startPosition.y + yPosition;
 
-    // Check if flip has completed (was flipping, now stopped) and trigger auto-center
-    const allVelocitiesZero =
-      Math.abs(flipVelocityXRef.current) < 0.01 &&
-      Math.abs(flipVelocityYRef.current) < 0.01 &&
-      Math.abs(flipVelocityZRef.current) < 0.01;
+      // Scale: Parabolic arc (starts at 1, peaks in middle, ends at 1)
+      const scale =
+        flipAnimationRef.current.startScale + PEAK_SCALE * sineProgress;
+      currentScaleRef.current = scale;
 
-    // If coin has landed, trigger auto-center after a short delay
-    if (isLandedRef.current && allVelocitiesZero) {
-      // Coin has landed, start auto-center back to center position
-      const snapBackSpeed = 2.0;
-      const dx = targetPositionRef.current.x - currentPositionRef.current.x;
-      const dy = targetPositionRef.current.y - currentPositionRef.current.y;
-      const dz = targetPositionRef.current.z - currentPositionRef.current.z;
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (distance > 0.01) {
-        snapBackVelocityRef.current.x = (dx / distance) * snapBackSpeed;
-        snapBackVelocityRef.current.y = (dy / distance) * snapBackSpeed;
-        snapBackVelocityRef.current.z = (dz / distance) * snapBackSpeed;
-      }
+      // Rotation: Interpolate from start to target (ADDITIVE)
+      const startRot = flipAnimationRef.current.startRotation;
+      const targetRot = {
+        x: flipAnimationRef.current.targetRotationX,
+        y: flipAnimationRef.current.targetRotationY,
+        z: flipAnimationRef.current.targetRotationZ,
+      };
 
-      // Reset landing state when starting to move back
-      if (distance > 0.05) {
-        isLandedRef.current = false;
-        isLandingRef.current = false;
-        verticalVelocityRef.current = 0;
-        flipStartTimeRef.current = null; // Reset flip timer
-        landedResultRef.current = null; // Clear previous result
-        landingAnimationStartTimeRef.current = null;
-        targetResultRotationYRef.current = null;
-        landingWobbleXRef.current = 0;
-        landingWobbleZRef.current = 0;
-        landingWobbleVelocityXRef.current = 0;
-        landingWobbleVelocityZRef.current = 0;
-      }
-    }
+      // Linear interpolation for rotation
+      currentRotationRef.current.x =
+        startRot.x + (targetRot.x - startRot.x) * easedProgress;
+      currentRotationRef.current.y =
+        startRot.y + (targetRot.y - startRot.y) * easedProgress;
+      currentRotationRef.current.z =
+        startRot.z + (targetRot.z - startRot.z) * easedProgress;
 
-    // If we were flipping and now all velocities are zero (but not landed yet), flip completed
-    if (wasFlippingRef.current && allVelocitiesZero && !isLandedRef.current) {
-      // Flip animation completed but coin hasn't landed yet (still falling)
-      // Don't auto-center yet, wait for landing
-    }
+      // X and Z positions stay constant during flip (no zoom)
+      currentPositionRef.current.x = flipAnimationRef.current.startPosition.x;
+      currentPositionRef.current.z = flipAnimationRef.current.startPosition.z;
 
-    // Update flip state for next frame
-    wasFlippingRef.current = hasFlipVelocity;
+      // Check if animation is complete
+      if (progress >= 1) {
+        console.log("[useCoinPhysics] Flip animation complete");
 
-    // Initialize flip start time on first frame of flip
-    if (hasFlipVelocity && flipStartTimeRef.current === null) {
-      flipStartTimeRef.current = state.clock.elapsedTime;
-    }
-
-    // Check if max flip duration has been exceeded
-    if (flipStartTimeRef.current !== null && !isLandedRef.current) {
-      const elapsedTime = state.clock.elapsedTime - flipStartTimeRef.current;
-
-      if (elapsedTime >= MAX_FLIP_DURATION) {
-        // Max time exceeded - force coin to land immediately
-        console.log(
-          "[useCoinPhysics] Max flip duration exceeded, forcing landing"
-        );
-
-        // Stop all velocities
-        flipVelocityXRef.current = 0;
-        flipVelocityYRef.current = 0;
-        flipVelocityZRef.current = 0;
-        verticalVelocityRef.current = 0;
-
-        // Force coin to landing position
-        // Detect heads/tails before resetting
-        const totalYRotation = currentRotationRef.current.y;
-        let normalizedY =
-          ((totalYRotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-        const isHeads =
-          normalizedY < Math.PI / 2 || normalizedY > (3 * Math.PI) / 2;
-        const result: "heads" | "tails" = isHeads ? "heads" : "tails";
-
-        console.log(
-          "[useCoinPhysics] Max duration - forcing landing with result:",
-          result
-        );
-
-        // Store the result
-        landedResultRef.current = result;
-
-        if (onLand) {
-          onLand(result);
-        }
-
-        currentPositionRef.current.y = 0; // Ground level
-        currentPositionRef.current.z = landingZPosition;
-        isLandedRef.current = true;
-        flipStartTimeRef.current = null;
-
-        // Reset rotation to face-on, but set Y rotation based on result:
-        // - Heads: Y = 0 (same as start)
-        // - Tails: Y = Math.PI (rotated 180° to show tails)
-        currentRotationRef.current.x = 0;
-        currentRotationRef.current.y = result === "heads" ? 0 : Math.PI;
+        // FLAT FLOOR CONSTRAINT: Ensure final rotations are exact
+        currentRotationRef.current.x = targetRot.x;
+        currentRotationRef.current.y = targetRot.y;
         currentRotationRef.current.z = 0;
+        currentScaleRef.current = 1.0;
+        currentPositionRef.current.y = flipAnimationRef.current.startPosition.y;
+
+        // Report result
+        if (onLand && flipAnimationRef.current.result) {
+          onLand(flipAnimationRef.current.result);
+        }
+
+        // Reset animation state
+        flipAnimationRef.current.isActive = false;
+        flipAnimationRef.current.startTime = 0;
       }
-    }
-
-    // Apply landing physics (gravity and falling)
-    if (
-      !isLandedRef.current &&
-      !isLandingRef.current &&
-      (hasFlipVelocity || verticalVelocityRef.current !== 0)
-    ) {
-      // Apply gravity
-      verticalVelocityRef.current += gravityRef.current * delta;
-
-      // Update Y position (falling)
-      currentPositionRef.current.y += verticalVelocityRef.current * delta;
-
-      // Move coin back in Z as it falls (toward landing position)
-      const zDiff = landingZPosition - currentPositionRef.current.z;
-      if (Math.abs(zDiff) > 0.01) {
-        currentPositionRef.current.z += zDiff * 0.3 * delta; // Smooth movement toward landing position
-      }
-
-      // Check if coin has landed (reached ground level)
-      const groundLevel = 0; // Ground plane is at y=0
+    } else {
+      // Apply snap back for position (only if not flipping)
       if (
-        currentPositionRef.current.y <= groundLevel &&
-        verticalVelocityRef.current < 0 &&
-        !isLandingRef.current
+        snapBackVelocityRef.current.x !== 0 ||
+        snapBackVelocityRef.current.y !== 0 ||
+        snapBackVelocityRef.current.z !== 0
       ) {
-        // First contact with ground - start landing animation
-        // Detect heads or tails based on Y rotation
-        const totalYRotation = currentRotationRef.current.y;
-        let normalizedY =
-          ((totalYRotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-        const isHeads =
-          normalizedY < Math.PI / 2 || normalizedY > (3 * Math.PI) / 2;
-        const result: "heads" | "tails" = isHeads ? "heads" : "tails";
+        // Apply snap back velocity
+        currentPositionRef.current.x += snapBackVelocityRef.current.x * delta;
+        currentPositionRef.current.y += snapBackVelocityRef.current.y * delta;
+        currentPositionRef.current.z = 0; // Keep Z at 0
 
-        console.log(
-          "[useCoinPhysics] Coin hit ground - starting landing animation:",
-          {
-            totalYRotation,
-            normalizedY,
-            result,
-          }
-        );
+        // Check if we've reached target
+        const dx = targetPositionRef.current.x - currentPositionRef.current.x;
+        const dy = targetPositionRef.current.y - currentPositionRef.current.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Store the result
-        landedResultRef.current = result;
-
-        // Set target rotation for final result
-        targetResultRotationYRef.current = result === "heads" ? 0 : Math.PI;
-
-        // Start landing animation
-        isLandingRef.current = true;
-        landingAnimationStartTimeRef.current = state.clock.elapsedTime;
-
-        // Bounce effect - reverse and reduce vertical velocity
-        verticalVelocityRef.current =
-          Math.abs(verticalVelocityRef.current) * BOUNCE_ELASTICITY;
-
-        // Add minimal initial wobble based on remaining rotation velocities
-        // Keep wobble very small so coin can flatten quickly
-        landingWobbleVelocityXRef.current = flipVelocityXRef.current * 0.2; // Reduced from 0.5
-        landingWobbleVelocityZRef.current = flipVelocityZRef.current * 0.2;
-
-        // Immediately start flattening X and Z rotations when landing starts
-        // Don't wait for the animation to progress - coin should start flattening right away
-        currentRotationRef.current.x *= 0.7; // Immediately reduce by 30%
-        currentRotationRef.current.z *= 0.7;
-
-        // Stop flip velocities (they'll be replaced by landing animation)
-        flipVelocityXRef.current = 0;
-        flipVelocityYRef.current = 0;
-        flipVelocityZRef.current = 0;
-
-        // Report result to parent (we know the result, just animating to it)
-        if (onLand) {
-          onLand(result);
-        }
-      }
-
-      // Landing animation phase - bounce, wobble, and settle
-      if (
-        isLandingRef.current &&
-        landingAnimationStartTimeRef.current !== null
-      ) {
-        const landingElapsed =
-          state.clock.elapsedTime - landingAnimationStartTimeRef.current;
-        const landingProgress = Math.min(
-          landingElapsed / LANDING_ANIMATION_DURATION,
-          1
-        );
-
-        // Apply bounce physics
-        if (
-          currentPositionRef.current.y > groundLevel ||
-          verticalVelocityRef.current > 0
-        ) {
-          verticalVelocityRef.current += gravityRef.current * delta * 0.5; // Reduced gravity during landing
-          currentPositionRef.current.y += verticalVelocityRef.current * delta;
-
-          // Bounce when hitting ground again
-          if (
-            currentPositionRef.current.y <= groundLevel &&
-            verticalVelocityRef.current < 0
-          ) {
-            verticalVelocityRef.current =
-              Math.abs(verticalVelocityRef.current) * BOUNCE_ELASTICITY * 0.5; // Smaller bounce
-            currentPositionRef.current.y = groundLevel;
-          }
+        if (distance < 0.05) {
+          currentPositionRef.current.x = targetPositionRef.current.x;
+          currentPositionRef.current.y = targetPositionRef.current.y;
+          currentPositionRef.current.z = 0;
+          snapBackVelocityRef.current = { x: 0, y: 0, z: 0 };
         } else {
-          currentPositionRef.current.y = groundLevel;
-          verticalVelocityRef.current = 0;
-        }
-
-        // Apply wobble (oscillation that decays over time)
-        landingWobbleXRef.current += landingWobbleVelocityXRef.current * delta;
-        landingWobbleZRef.current += landingWobbleVelocityZRef.current * delta;
-
-        // Damping for wobble
-        landingWobbleVelocityXRef.current *= Math.pow(
-          WOBBLE_DAMPING,
-          delta * 60
-        );
-        landingWobbleVelocityZRef.current *= Math.pow(
-          WOBBLE_DAMPING,
-          delta * 60
-        );
-
-        // Gradually reduce wobble amplitude
-        const wobbleDecay = Math.pow(0.95, delta * 60);
-        landingWobbleXRef.current *= wobbleDecay;
-        landingWobbleZRef.current *= wobbleDecay;
-
-        // Gradually rotate to target result
-        if (targetResultRotationYRef.current !== null) {
-          const currentY = currentRotationRef.current.y;
-          const targetY = targetResultRotationYRef.current;
-
-          // Normalize both to 0-2π range for smooth interpolation
-          let normalizedCurrent =
-            ((currentY % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-          let normalizedTarget =
-            ((targetY % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-
-          // Find shortest rotation path
-          let diff = normalizedTarget - normalizedCurrent;
-          if (diff > Math.PI) diff -= Math.PI * 2;
-          if (diff < -Math.PI) diff += Math.PI * 2;
-
-          // Smooth interpolation with easing
-          const easeOut = 1 - Math.pow(1 - landingProgress, 3); // Cubic ease-out
-          currentRotationRef.current.y = normalizedCurrent + diff * easeOut;
-        }
-
-        // Aggressively flatten X and Z rotations (face-on) - coin MUST land flat
-        // Use very strong exponential decay to ensure coin ends up perfectly flat
-        // Start flattening immediately and make it extremely aggressive
-        // The coin should be mostly flat within the first 20% of landing animation
-        const flattenStrength = Math.min(1, landingProgress * 5); // Extremely aggressive - reaches 1 at 20% progress
-        currentRotationRef.current.x =
-          currentRotationRef.current.x * (1 - flattenStrength);
-        currentRotationRef.current.z =
-          currentRotationRef.current.z * (1 - flattenStrength);
-
-        // Apply minimal wobble to X and Z rotations (only very early in landing, then fade out quickly)
-        // Wobble should not prevent flattening - it's just for visual effect
-        const wobbleStrength = Math.max(0, 1 - landingProgress * 6); // Fade out wobble at ~17% progress
-        const wobbleAmountX = landingWobbleXRef.current * 0.03 * wobbleStrength; // Very reduced wobble
-        const wobbleAmountZ = landingWobbleZRef.current * 0.03 * wobbleStrength;
-        // Only apply wobble if it doesn't prevent flattening
-        if (
-          Math.abs(currentRotationRef.current.x + wobbleAmountX) <
-          Math.abs(currentRotationRef.current.x)
-        ) {
-          currentRotationRef.current.x += wobbleAmountX;
-        }
-        if (
-          Math.abs(currentRotationRef.current.z + wobbleAmountZ) <
-          Math.abs(currentRotationRef.current.z)
-        ) {
-          currentRotationRef.current.z += wobbleAmountZ;
-        }
-
-        // Move to landing Z position
-        const zDiff = landingZPosition - currentPositionRef.current.z;
-        if (Math.abs(zDiff) > 0.01) {
-          currentPositionRef.current.z += zDiff * 0.5 * delta; // Smooth movement
-        } else {
-          currentPositionRef.current.z = landingZPosition;
-        }
-
-        // Ensure coin is always flat during landing (safety check)
-        // If we're more than 30% through, aggressively force X and Z to 0
-        if (landingProgress > 0.3) {
-          const forceFlattenStrength = (landingProgress - 0.3) / 0.7; // 0 to 1 from 30% to 100%
-          // Very aggressive flattening - force to 0
-          currentRotationRef.current.x *= 1 - forceFlattenStrength * 0.8;
-          currentRotationRef.current.z *= 1 - forceFlattenStrength * 0.8;
-        }
-
-        // After 50% progress, ensure coin is essentially flat (within 0.1 radians)
-        if (landingProgress > 0.5) {
-          if (Math.abs(currentRotationRef.current.x) < 0.1) {
-            currentRotationRef.current.x = 0;
-          }
-          if (Math.abs(currentRotationRef.current.z) < 0.1) {
-            currentRotationRef.current.z = 0;
-          }
-        }
-
-        // Check if landing animation is complete
-        if (landingProgress >= 1) {
-          console.log("[useCoinPhysics] Landing animation complete");
-          isLandingRef.current = false;
-          isLandedRef.current = true;
-          landingAnimationStartTimeRef.current = null;
-          flipStartTimeRef.current = null;
-
-          // Finalize rotation to exact target - MUST be flat
-          if (targetResultRotationYRef.current !== null) {
-            currentRotationRef.current.y = targetResultRotationYRef.current;
-          }
-          // Force X and Z to exactly 0 - coin MUST be flat on the floor
-          currentRotationRef.current.x = 0;
-          currentRotationRef.current.z = 0;
-          landingWobbleXRef.current = 0;
-          landingWobbleZRef.current = 0;
-          landingWobbleVelocityXRef.current = 0;
-          landingWobbleVelocityZRef.current = 0;
-          verticalVelocityRef.current = 0;
-          currentPositionRef.current.y = groundLevel;
-          currentPositionRef.current.z = landingZPosition;
+          const snapDamping = 0.95;
+          snapBackVelocityRef.current.x *= Math.pow(snapDamping, delta * 60);
+          snapBackVelocityRef.current.y *= Math.pow(snapDamping, delta * 60);
+          snapBackVelocityRef.current.z = 0;
         }
       }
     }
@@ -572,7 +297,14 @@ export function useCoinPhysics({
     groupRef.current.position.y = currentPositionRef.current.y;
     groupRef.current.position.z = currentPositionRef.current.z;
 
-    // Apply rotations: base X rotation + flip rotations + landing wobble
+    // Apply scale
+    groupRef.current.scale.set(
+      currentScaleRef.current,
+      currentScaleRef.current,
+      currentScaleRef.current
+    );
+
+    // Apply rotations: base X rotation + flip rotations
     groupRef.current.rotation.x = baseRotationX + currentRotationRef.current.x;
     groupRef.current.rotation.y = currentRotationRef.current.y;
     groupRef.current.rotation.z = currentRotationRef.current.z;

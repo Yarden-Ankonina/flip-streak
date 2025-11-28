@@ -21,19 +21,19 @@ export function CoinGeometry({
   return (
     <>
       {/* Top face (heads) - positioned on top, rotated to face camera */}
-      <mesh position={[0, height / 2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, height / 2, 0]} rotation={[-Math.PI / 2, 0, 0]} castShadow={false} receiveShadow={false}>
         <circleGeometry args={[radius, radialSegments]} />
         {headsMaterial}
       </mesh>
       
       {/* Bottom face (tails) - positioned on bottom, rotated to face away */}
-      <mesh position={[0, -height / 2, 0]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0, -height / 2, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow={false} receiveShadow={false}>
         <circleGeometry args={[radius, radialSegments]} />
         {tailsMaterial}
       </mesh>
       
       {/* Edge/rim - gives the coin thickness/width, maintains 1:1 ratio */}
-      <mesh>
+      <mesh castShadow={false} receiveShadow={false}>
         <cylinderGeometry args={[radius, radius, height, radialSegments, 1, true]} />
         <meshStandardMaterial
           color="#b8941f"

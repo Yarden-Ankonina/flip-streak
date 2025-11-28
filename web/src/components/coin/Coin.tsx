@@ -13,18 +13,25 @@ interface CoinProps {
   onLand?: (result: "heads" | "tails") => void;
 }
 
-export default function Coin({ panData, flickData, onPanComplete, onFlickComplete, onTouchEnd, onLand }: CoinProps) {
-  console.log('[Coin] Component rendering');
-  
+export default function Coin({
+  panData,
+  flickData,
+  onPanComplete,
+  onFlickComplete,
+  onTouchEnd,
+  onLand,
+}: CoinProps) {
+  console.log("[Coin] Component rendering");
+
   const groupRef = useRef<THREE.Group>(null);
-  
+
   // Base rotation: rotate 90° on X-axis to make coin lie flat, showing heads face-on
   // This rotates the coin so the heads side (at y=height/2) faces the camera
   const baseRotationX = Math.PI / 2;
-  
+
   // Load materials (no ridges for now)
   const { headsMaterial, tailsMaterial } = useCoinMaterials();
-  
+
   // Initialize coin to start face-on (heads showing)
   useEffect(() => {
     if (groupRef.current) {
@@ -34,8 +41,8 @@ export default function Coin({ panData, flickData, onPanComplete, onFlickComplet
       groupRef.current.rotation.y = 0;
       groupRef.current.rotation.z = 0;
       groupRef.current.position.set(0, 0, 0);
-      
-      console.log('[Coin] Group ref initialized - showing heads:', {
+
+      console.log("[Coin] Group ref initialized - showing heads:", {
         position: groupRef.current.position,
         rotation: {
           x: groupRef.current.rotation.x,
@@ -59,7 +66,7 @@ export default function Coin({ panData, flickData, onPanComplete, onFlickComplet
     onLand,
   });
 
-  console.log('[Coin] Rendering coin geometry');
+  console.log("[Coin] Rendering coin geometry");
   return (
     <group ref={groupRef} rotation={[baseRotationX, 0, 0]}>
       <CoinGeometry
@@ -69,4 +76,3 @@ export default function Coin({ panData, flickData, onPanComplete, onFlickComplet
     </group>
   );
 }
-

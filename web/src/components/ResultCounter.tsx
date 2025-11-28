@@ -19,12 +19,14 @@ export default function ResultCounter({ result, onResultChange }: ResultCounterP
     // Update when we get a new result
     if (result === "heads") {
       setHeadsCount((prev) => prev + 1);
+      setTailsCount(0); // Reset tails count when heads is selected
       setCurrentResult("heads");
       if (onResultChange) {
         onResultChange("heads");
       }
     } else if (result === "tails") {
       setTailsCount((prev) => prev + 1);
+      setHeadsCount(0); // Reset heads count when tails is selected
       setCurrentResult("tails");
       if (onResultChange) {
         onResultChange("tails");
