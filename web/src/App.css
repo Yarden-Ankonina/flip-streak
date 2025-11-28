@@ -5,10 +5,15 @@
   padding: 0;
   overflow: hidden;
   background: #1a1a1a;
+  position: relative;
 }
 
 canvas {
   display: block;
   width: 100%;
   height: 100%;
+  /* Account for header and footer */
+  padding-top: 60px;
+  padding-bottom: 100px;
+  box-sizing: border-box;
 }

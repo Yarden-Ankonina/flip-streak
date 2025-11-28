@@ -38,23 +38,45 @@ The artist must provide PBR (Physically Based Rendering) textures.
 ### 3.1 The Coin
 
 - **Visuals**: A standard meshStandardMaterial using the maps defined in 2.2.
+- **Geometry**: Coin must have visible width/thickness (edge/rim) - not a flat paper-like appearance. The coin should appear as a 3D cylinder with distinct faces and edge.
+- **Initial State**: Coin always starts face-on showing the heads side (or last coin state if available).
 - **Interaction**: The coin reacts to the light source as it rotates.
 - **State**: The coin has a binary state (Heads/Tails) determined by the final rotation (Euler angles) relative to the floor plane.
 
 ### 3.2 Physics & Interaction (The "Thumb" Feel)
 
-**Interaction Model (Pokemon TCG Coin Style):**
+**Interaction Model:**
 
-- **Touch & Drag (Panning)**:
-  - User can touch and drag the coin to rotate it in 3D space on all axes
-  - This allows viewing the coin from different angles (like holding and rotating it)
-  - **Does NOT start flipping** - this is just for inspection/positioning
-  - Coin follows finger movement directly (1:1 rotation mapping)
-- **Flick Up (Flip Trigger)**:
-  - User flicks upward with thumb to initiate the flip
-  - The speed of the flick determines the rotational impulse applied
-  - Only upward flicks trigger the flip animation
+- **Touch & Drag (Translation)**:
+  - User can touch and drag the coin to move it sideways (X/Y translation)
+  - Coin follows finger movement directly (1:1 position mapping)
+  - **Does NOT rotate the coin** - only translates its position
+  - Coin remains face-on to camera during dragging
+  - **Does NOT start flipping** - this is just for positioning
+- **Swipe Up (Flip Trigger)**:
+  - User swipes upward with thumb to initiate the flip
+  - The speed of the swipe determines the rotational impulse applied
+  - Only upward swipes trigger the flip animation
   - Coin spins/flips in 3D space with physics-based motion
+- **Physics Simulation**:
+  - Coin always falls using physics (gravity + ground collision)
+  - Realistic physics simulation for every flip
+  - Coin settles naturally on the ground plane
+  - Physics should feel heavy and substantial (not like a piece of paper)
+  - Damping values should be tuned to give the coin weight and momentum
+  - Focus on up/down (Y-axis) movement with minimal rotations
+  - Reduced overall impulse for more controlled flips
+- **Landing Physics**:
+  - Coin must land on the floor at a fixed point (back of screen, same Z position)
+  - Gravity applies during flip animation (coin falls down)
+  - Coin moves back in Z direction as it falls toward landing position
+  - When coin reaches ground level (Y=0), all physics stop and coin settles
+  - After landing, coin automatically returns to center position
+- **Double-Click/Tap to Skip**:
+  - User can double-click or double-tap during the flip animation
+  - Immediately skips the physics simulation and shows the result
+  - Useful for impatient users who want instant results
+  - Still maintains streak counter accuracy
 - **Haptics**: (Via Capacitor Haptics Plugin)
   - Light vibration on "touch start" (when panning).
   - Heavy vibration on "flick trigger".
@@ -63,7 +85,9 @@ The artist must provide PBR (Physically Based Rendering) textures.
 
 ### 3.3 The Logic (Streak Counter)
 
-- **Display**: A prominent counter showing the current streak.
+- **Display**: A prominent counter at the bottom showing the current result (Heads or Tails) with count.
+- **Format**: Shows "Heads x3" or "Tails x5" format with icon, label, and count.
+- **Styling**: Counter text should be white (not yellow/gold) for better visibility.
 - **Algorithm**:
   - If NewResult == PreviousResult: Streak + 1
   - If NewResult != PreviousResult: Streak = 1
@@ -71,15 +95,19 @@ The artist must provide PBR (Physically Based Rendering) textures.
 
 ## 4. User Flow
 
-1. **Idle**: Coin sits in center, face-on to camera. "Flick Up to Flip" hint (fades out after first use).
-2. **Inspection (Optional)**: User can touch and drag to rotate coin in 3D space, viewing it from different angles.
-3. **Action**: User flicks thumb upward.
+1. **Idle**: Coin sits in center, face-on to camera. "Swipe Up to Flip" hint (fades out after first use).
+2. **Positioning (Optional)**: User can touch and drag to move coin sideways (translate X/Y), but coin does not rotate.
+3. **Action**: User swipes thumb upward.
 4. **Animation**: Coin receives rotational impulse and spins/flips in 3D space using physics.
-5. **Result**: Coin collides with the floor and settles.
-6. **Feedback**:
+5. **Physics Fall**: Coin falls using physics simulation every time, with gravity and ground collision.
+6. **Skip Option (Double-Click)**: User can double-click/tap during the flip animation to skip the physics and immediately show the result (for impatient users).
+7. **Result**: Coin collides with the floor and settles (or immediately shows result if skipped).
+8. **Feedback**:
    - Haptic click.
    - Text: "HEADS" appears.
    - Streak Counter updates.
+9. **Auto-Center**: Coin automatically returns to center position after flip animation completes.
+10. **Reset**: Coin returns to center position after flip completes.
 
 ## 5. Future Roadmap (Post-MVP)
 

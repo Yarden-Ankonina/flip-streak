@@ -1,0 +1,46 @@
+.result-counter {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.result-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.result-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.result-label {
+  text-transform: capitalize;
+  letter-spacing: 0.05em;
+}
+
+.result-count {
+  opacity: 0.8;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .result-display {
+    font-size: 1rem;
+  }
+
+  .result-icon {
+    font-size: 1.25rem;
+  }
+}
+
