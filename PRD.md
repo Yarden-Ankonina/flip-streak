@@ -23,6 +23,7 @@ The artist must provide PBR (Physically Based Rendering) textures.
 - **UV Mapping**: The artist must ensure the "Side/Edge" of the coin is UV unrapped separately from the Faces so the ridges look correct.
 
 **Required Textures (Per Skin):**
+
 - **Albedo/Color Map**: The visual design.
 - **Normal Map**: Purple map for fake 3D depth (embossing).
 - **Roughness Map**: Defines shiny vs matte areas.
@@ -72,4 +73,3 @@ The artist must provide PBR (Physically Based Rendering) textures.
 
 - **Skins**: Unlockable coins (Bitcoin, Ancient Gold, Poker Chip) based on total flips.
 - **Leaderboard**: Global highest streak.
-
